@@ -243,7 +243,7 @@ export default function Home() {
               maxFiles={1}
               label="Upload CV (Wajib)"
               description="PDF — Maksimal 10MB"
-              icon="file"
+              icon="pdf"
               files={cvFiles}
               onFilesChange={setCvFiles}
               disabled={isExtracting}
@@ -255,7 +255,7 @@ export default function Home() {
               maxFiles={1}
               label="Upload Portfolio (Opsional)"
               description="PDF — Maksimal 10MB"
-              icon="file"
+              icon="pdf"
               files={portfolioFiles}
               onFilesChange={setPortfolioFiles}
               disabled={isExtracting}

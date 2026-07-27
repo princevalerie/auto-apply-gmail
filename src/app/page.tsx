@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { useSession } from "next-auth/react";
-import { ArrowRight, Loader2, Sparkles, Send, CheckCircle2, FileText } from "lucide-react";
+import { ArrowRight, Loader2, Sparkles, Send, CheckCircle2, FileText, Cpu } from "lucide-react";
 import { FileUploadZone } from "@/components/file-upload-zone";
 import { ApplicationCard } from "@/components/application-card";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { toast } from "sonner";
 import { getMimeType, isValidEmail } from "@/lib/utils";
+import { getStoredApiKeys } from "@/components/settings-panel";
 
 export interface ExtractionResult {
   position: string;
@@ -20,6 +21,8 @@ export interface ExtractionResult {
   emailValid: boolean;
   warning: string | null;
   screenshotPreview: string;
+  extractProvider?: "gemini" | "groq";
+  emailProvider?: "gemini" | "groq";
 }
 
 interface SendState {
@@ -90,7 +93,8 @@ export default function Home() {
             imageBase64: base64, 
             mimeType,
             cvBase64,
-            portfolioBase64
+            portfolioBase64,
+            ...getStoredApiKeys(),
           }),
         });
 
@@ -330,6 +334,23 @@ export default function Home() {
                 <p className="text-sm text-muted-foreground">
                   {results.length} lowongan · {validCount} email valid · {sentCount} terkirim
                 </p>
+                {/* Provider badges */}
+                {results.length > 0 && results[0].extractProvider && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                      results[0].extractProvider === "gemini"
+                        ? "bg-primary/15 text-primary border border-primary/20"
+                        : "bg-accent/15 text-accent border border-accent/20"
+                    }`}>
+                      {results[0].extractProvider === "gemini" ? (
+                        <Sparkles className="w-2.5 h-2.5" />
+                      ) : (
+                        <Cpu className="w-2.5 h-2.5" />
+                      )}
+                      {results[0].extractProvider === "gemini" ? "Gemini" : "Groq"}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Send All Button */}

@@ -1,6 +1,12 @@
 import { GoogleGenerativeAI, SchemaType, ResponseSchema } from "@google/generative-ai";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+function getGenAI(apiKey?: string): GoogleGenerativeAI {
+  const key = apiKey || process.env.GEMINI_API_KEY;
+  if (!key) {
+    throw new Error("Gemini API key tidak tersedia. Set GEMINI_API_KEY di environment atau masukkan via Settings.");
+  }
+  return new GoogleGenerativeAI(key);
+}
 
 // ─── Types ─────────────────────────────────────────────────
 
@@ -27,8 +33,10 @@ export interface FileAttachment {
 
 export async function extractJobInfo(
   imageBase64: string,
-  mimeType: string
+  mimeType: string,
+  apiKey?: string
 ): Promise<JobInfo> {
+  const genAI = getGenAI(apiKey);
   const model = genAI.getGenerativeModel({
     model: "gemini-3.6-flash",
   });
@@ -108,8 +116,10 @@ Penting: Pastikan email yang diekstrak benar-benar valid dan ada di screenshot. 
 export async function generateEmail(
   jobInfo: JobInfo,
   cvFile?: FileAttachment | null,
-  portfolioFile?: FileAttachment | null
+  portfolioFile?: FileAttachment | null,
+  apiKey?: string
 ): Promise<GeneratedEmail> {
+  const genAI = getGenAI(apiKey);
   const model = genAI.getGenerativeModel({
     model: "gemini-3.6-flash",
   });

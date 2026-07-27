@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { SettingsPanel } from "@/components/settings-panel";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: Home },
@@ -24,6 +25,7 @@ export function Navbar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   if (!session) return null;
 
@@ -91,6 +93,13 @@ export function Navbar() {
             </div>
           </div>
           <button
+            onClick={() => setSettingsOpen(true)}
+            className="flex items-center gap-2 w-full px-4 py-2 rounded-xl text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors mb-1"
+          >
+            <Settings className="w-4 h-4" />
+            API Settings
+          </button>
+          <button
             onClick={() => signOut({ callbackUrl: "/login" })}
             className="flex items-center gap-2 w-full px-4 py-2 rounded-xl text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
           >
@@ -147,6 +156,13 @@ export function Navbar() {
               );
             })}
             <button
+              onClick={() => { setSettingsOpen(true); setMobileOpen(false); }}
+              className="flex items-center gap-2 w-full px-4 py-3 rounded-xl text-sm text-muted-foreground hover:text-foreground hover:bg-secondary"
+            >
+              <Settings className="w-4 h-4" />
+              API Settings
+            </button>
+            <button
               onClick={() => signOut({ callbackUrl: "/login" })}
               className="flex items-center gap-2 w-full px-4 py-3 rounded-xl text-sm text-muted-foreground hover:text-destructive"
             >
@@ -156,6 +172,9 @@ export function Navbar() {
           </nav>
         </div>
       )}
+
+      {/* Settings Panel */}
+      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </>
   );
 }

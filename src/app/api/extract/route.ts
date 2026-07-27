@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { extractJobInfo, generateEmail, FileAttachment } from "@/lib/gemini";
+import { extractJobInfoWithFallback, generateEmailWithFallback } from "@/lib/ai-provider";
+import type { FileAttachment } from "@/lib/gemini";
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -10,7 +11,14 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { imageBase64, mimeType, cvBase64, portfolioBase64 } = body;
+    const {
+      imageBase64,
+      mimeType,
+      cvBase64,
+      portfolioBase64,
+      geminiApiKey,
+      groqApiKey,
+    } = body;
 
     if (!imageBase64 || !mimeType) {
       return NextResponse.json(
@@ -19,8 +27,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 1: Extract job info from screenshot
-    const jobInfo = await extractJobInfo(imageBase64, mimeType);
+    // Step 1: Extract job info from screenshot (with fallback)
+    const extractResult = await extractJobInfoWithFallback(
+      imageBase64,
+      mimeType,
+      geminiApiKey,
+      groqApiKey
+    );
+    const jobInfo = extractResult.data;
 
     // Step 2: Prepare CV and Portfolio from frontend base64
     let cvFile: FileAttachment | null = null;
@@ -40,8 +54,15 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    // Step 3: Generate email content with CV & portfolio context
-    const emailContent = await generateEmail(jobInfo, cvFile, portfolioFile);
+    // Step 3: Generate email content with CV & portfolio context (with fallback)
+    const emailResult = await generateEmailWithFallback(
+      jobInfo,
+      cvFile,
+      portfolioFile,
+      geminiApiKey,
+      groqApiKey
+    );
+    const emailContent = emailResult.data;
 
     // Step 4: Flag if email not detected
     const emailValid = jobInfo.email && jobInfo.email.includes("@");
@@ -53,6 +74,8 @@ export async function POST(request: NextRequest) {
         emailSubject: emailContent.subject,
         emailBody: emailContent.body,
         emailValid,
+        extractProvider: extractResult.provider,
+        emailProvider: emailResult.provider,
         warning: !emailValid
           ? "Email tujuan tidak terdeteksi dari screenshot. Silakan masukkan email secara manual."
           : null,

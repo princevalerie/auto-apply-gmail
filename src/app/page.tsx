@@ -111,7 +111,8 @@ export default function Home() {
 
         setExtractionProgress(((i + 1) / screenshots.length) * 100);
       } catch (error) {
-        toast.error(`Gagal memproses screenshot ${i + 1}: ${(error as Error).message}`);
+        const errMsg = (error as Error).message;
+        toast.error(`Gagal memproses screenshot ${i + 1}: ${errMsg}`);
         extractedResults.push({
           position: "Gagal diproses",
           company: "N/A",
@@ -121,7 +122,7 @@ export default function Home() {
           emailSubject: "",
           emailBody: "",
           emailValid: false,
-          warning: "Gagal mengekstrak informasi dari screenshot ini",
+          warning: `Error: ${errMsg}`,
           screenshotPreview: URL.createObjectURL(screenshots[i]),
         });
       }

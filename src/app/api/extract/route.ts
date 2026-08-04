@@ -82,11 +82,14 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Extract error:", error);
+    const errorMessage = (error as Error).message;
+    console.error("Extract error:", errorMessage);
+    console.error("ENV check — GEMINI_API_KEY:", !!process.env.GEMINI_API_KEY ? "SET" : "MISSING");
+    console.error("ENV check — GROQ_API_KEY:", !!process.env.GROQ_API_KEY ? "SET" : "MISSING");
     return NextResponse.json(
       {
-        error: "Gagal mengekstrak informasi dari screenshot",
-        details: (error as Error).message,
+        error: `Gagal mengekstrak: ${errorMessage}`,
+        details: errorMessage,
       },
       { status: 500 }
     );

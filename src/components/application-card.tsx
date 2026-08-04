@@ -22,6 +22,7 @@ interface ApplicationData {
   emailSubject: string;
   emailBody: string;
   emailValid: boolean;
+  warning?: string | null;
   screenshotUrl?: string;
   screenshotPreview?: string;
 }
@@ -51,6 +52,7 @@ export function ApplicationCard({
 }: ApplicationCardProps) {
   const emailIsValid = isValidEmail(data.email);
   const emailIsEmpty = !data.email || data.email.trim() === "";
+  const isFailed = data.position === "Gagal diproses";
 
   return (
     <div
@@ -119,6 +121,13 @@ export function ApplicationCard({
           </div>
         </div>
       </div>
+
+      {/* Warning/Error from extraction */}
+      {data.warning && (
+        <div className="mb-4 px-4 py-3 rounded-xl bg-warning/10 border border-warning/20 text-sm text-warning">
+          {data.warning}
+        </div>
+      )}
 
       {/* Requirements */}
       {data.requirements && data.requirements.length > 0 && (

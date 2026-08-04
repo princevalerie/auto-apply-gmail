@@ -4,8 +4,8 @@
 import type { JobInfo, GeneratedEmail, FileAttachment } from "./gemini";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_VISION_MODEL = "llama-4-scout-17b-16e-instruct";
-const GROQ_TEXT_MODEL = "llama-3.3-70b-versatile";
+const GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
+const GROQ_TEXT_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
 
 interface GroqMessage {
   role: "system" | "user" | "assistant";

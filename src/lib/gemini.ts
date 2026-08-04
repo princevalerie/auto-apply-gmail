@@ -15,10 +15,15 @@ function isModelOverloadError(error: unknown): boolean {
   const msg = (error as Error)?.message?.toLowerCase() || "";
   return (
     msg.includes("503") ||
+    msg.includes("429") ||
     msg.includes("service unavailable") ||
     msg.includes("overloaded") ||
     msg.includes("high demand") ||
-    msg.includes("temporarily unavailable")
+    msg.includes("temporarily unavailable") ||
+    msg.includes("quota") ||
+    msg.includes("rate limit") ||
+    msg.includes("too many requests") ||
+    msg.includes("resource_exhausted")
   );
 }
 

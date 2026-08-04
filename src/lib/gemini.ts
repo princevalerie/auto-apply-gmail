@@ -1,7 +1,5 @@
 import { GoogleGenerativeAI, SchemaType, ResponseSchema } from "@google/generative-ai";
-
-// Model priority: try primary first, fallback on 503/overload
-const GEMINI_MODELS = ["gemini-2.0-flash", "gemini-1.5-flash"] as const;
+import { discoverModels, getPreferredGeminiModels } from "./model-discovery";
 
 function getGenAI(apiKey?: string): GoogleGenerativeAI {
   const key = apiKey || process.env.GEMINI_API_KEY;
@@ -94,7 +92,12 @@ export async function extractJobInfo(
 
   let lastError: Error | null = null;
 
-  for (const modelName of GEMINI_MODELS) {
+  // Auto-discover available models
+  const discovered = await discoverModels(apiKey);
+  const modelsToTry = getPreferredGeminiModels(discovered.gemini);
+  console.log(`[Gemini] Will try models: ${modelsToTry.join(", ")}`);
+
+  for (const modelName of modelsToTry) {
     try {
       console.log(`[Gemini] Trying model: ${modelName}`);
       const model = genAI.getGenerativeModel({ model: modelName });
@@ -259,7 +262,12 @@ STRUKTUR BODY EMAIL:
 
   let lastError: Error | null = null;
 
-  for (const modelName of GEMINI_MODELS) {
+  // Auto-discover available models
+  const discovered = await discoverModels(apiKey);
+  const modelsToTry = getPreferredGeminiModels(discovered.gemini);
+  console.log(`[Gemini] Will try models for email: ${modelsToTry.join(", ")}`);
+
+  for (const modelName of modelsToTry) {
     try {
       console.log(`[Gemini] Trying model for email: ${modelName}`);
       const model = genAI.getGenerativeModel({ model: modelName });

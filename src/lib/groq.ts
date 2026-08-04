@@ -2,10 +2,9 @@
 // Used as fallback when Gemini hits rate limits
 
 import type { JobInfo, GeneratedEmail, FileAttachment } from "./gemini";
+import { discoverModels, getPreferredGroqVisionModel, getPreferredGroqTextModel } from "./model-discovery";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
-const GROQ_TEXT_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
 
 interface GroqMessage {
   role: "system" | "user" | "assistant";
@@ -107,7 +106,11 @@ Respond HANYA dalam format JSON yang valid.`,
     },
   ];
 
-  const responseText = await callGroq(apiKey, GROQ_VISION_MODEL, messages, true);
+  const discovered = await discoverModels(undefined, apiKey);
+  const modelName = getPreferredGroqVisionModel(discovered.groq);
+  console.log(`[Groq] Using model for extraction: ${modelName}`);
+
+  const responseText = await callGroq(apiKey, modelName, messages, true);
   return JSON.parse(responseText) as JobInfo;
 }
 
@@ -220,8 +223,12 @@ Respond HANYA dalam format JSON: {"subject": "...", "body": "..."}`,
     },
   ];
 
-  // Use vision model if we have attachments (CV/portfolio as images), otherwise text model
-  const model = cvFile || portfolioFile ? GROQ_VISION_MODEL : GROQ_TEXT_MODEL;
+  const discovered = await discoverModels(undefined, apiKey);
+  const visionModel = getPreferredGroqVisionModel(discovered.groq);
+  const textModel = getPreferredGroqTextModel(discovered.groq);
+  const model = cvFile || portfolioFile ? visionModel : textModel;
+  console.log(`[Groq] Using model for email: ${model}`);
+
   const responseText = await callGroq(apiKey, model, messages, true);
   return JSON.parse(responseText) as GeneratedEmail;
 }

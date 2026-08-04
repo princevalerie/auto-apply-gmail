@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Loader2,
   Send,
+  Edit3,
 } from "lucide-react";
 import { cn, isValidEmail } from "@/lib/utils";
 
@@ -49,6 +50,7 @@ export function ApplicationCard({
   error,
 }: ApplicationCardProps) {
   const emailIsValid = isValidEmail(data.email);
+  const emailIsEmpty = !data.email || data.email.trim() === "";
 
   return (
     <div
@@ -103,9 +105,13 @@ export function ApplicationCard({
               <span className="badge badge-failed">
                 <AlertTriangle className="w-3 h-3" /> Gagal
               </span>
+            ) : emailIsEmpty ? (
+              <span className="badge badge-warning">
+                <Edit3 className="w-3 h-3" /> Ketik email manual
+              </span>
             ) : !emailIsValid ? (
               <span className="badge badge-warning">
-                <AlertTriangle className="w-3 h-3" /> Email tidak valid
+                <AlertTriangle className="w-3 h-3" /> Format email salah
               </span>
             ) : (
               <span className="badge badge-draft">Siap kirim</span>
@@ -147,10 +153,16 @@ export function ApplicationCard({
             "w-full px-4 py-2.5 rounded-xl bg-input border text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50",
             emailIsValid ? "border-border" : "border-warning/50"
           )}
-          placeholder="email@company.com"
+          placeholder={emailIsEmpty ? "Email tidak terdeteksi — ketik manual di sini" : "email@company.com"}
           disabled={sent || sending}
         />
-        {!emailIsValid && data.email && (
+        {emailIsEmpty && (
+          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+            <Edit3 className="w-3 h-3" />
+            Email tidak terdeteksi dari screenshot. Silakan ketik alamat email tujuan.
+          </p>
+        )}
+        {!emailIsValid && !emailIsEmpty && (
           <p className="text-xs text-warning mt-1 flex items-center gap-1">
             <AlertTriangle className="w-3 h-3" />
             Format email tidak valid

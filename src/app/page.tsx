@@ -99,8 +99,22 @@ export default function Home() {
         });
 
         if (!res.ok) {
-          const error = await res.json();
-          throw new Error(error.error || "Extraction failed");
+          let errorMsg = "Extraction failed";
+          const contentType = res.headers.get("content-type") || "";
+          if (res.status === 413) {
+            errorMsg = "Ukuran file terlalu besar (melebihi batas maksimum 4.5MB). Silakan kompres screenshot/CV/Portfolio Anda.";
+          } else if (contentType.includes("application/json")) {
+            const errorJson = await res.json();
+            errorMsg = errorJson.error || errorMsg;
+          } else {
+            const rawText = await res.text();
+            if (rawText.includes("Request Entity Too Large")) {
+              errorMsg = "Ukuran total file terlalu besar (maksimal 4.5MB). Harap kurangi ukuran file CV/Portfolio atau resolusi screenshot.";
+            } else {
+              errorMsg = rawText.slice(0, 100) || errorMsg;
+            }
+          }
+          throw new Error(errorMsg);
         }
 
         const data = await res.json();

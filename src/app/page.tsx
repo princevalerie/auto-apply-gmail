@@ -86,7 +86,7 @@ export default function Home() {
         const base64 = await fileToBase64(file);
         const mimeType = getMimeType(file.name);
 
-        const res = await fetch("/api/extract", {
+        let res = await fetch("/api/extract", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
@@ -97,6 +97,34 @@ export default function Home() {
             ...getStoredApiKeys(),
           }),
         });
+
+        // Fallback: If payload too large and portfolio was provided, retry using only CV
+        if (!res.ok && portfolioBase64) {
+          const isPayloadTooLarge = res.status === 413;
+          let isLargeText = false;
+          
+          if (!isPayloadTooLarge) {
+            const cloneRes = res.clone();
+            const rawText = await cloneRes.text();
+            if (rawText.includes("Request Entity Too Large")) {
+              isLargeText = true;
+            }
+          }
+
+          if (isPayloadTooLarge || isLargeText) {
+            toast.info("File terlalu besar. Mencoba memproses kembali menggunakan CV saja...");
+            res = await fetch("/api/extract", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ 
+                imageBase64: base64, 
+                mimeType,
+                cvBase64,
+                ...getStoredApiKeys(),
+              }),
+            });
+          }
+        }
 
         if (!res.ok) {
           let errorMsg = "Extraction failed";

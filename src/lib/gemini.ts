@@ -1,11 +1,25 @@
 import { GoogleGenerativeAI, SchemaType, ResponseSchema } from "@google/generative-ai";
 
+// Model priority: try primary first, fallback on 503/overload
+const GEMINI_MODELS = ["gemini-2.0-flash", "gemini-1.5-flash"] as const;
+
 function getGenAI(apiKey?: string): GoogleGenerativeAI {
   const key = apiKey || process.env.GEMINI_API_KEY;
   if (!key) {
     throw new Error("Gemini API key tidak tersedia. Set GEMINI_API_KEY di environment atau masukkan via Settings.");
   }
   return new GoogleGenerativeAI(key);
+}
+
+function isModelOverloadError(error: unknown): boolean {
+  const msg = (error as Error)?.message?.toLowerCase() || "";
+  return (
+    msg.includes("503") ||
+    msg.includes("service unavailable") ||
+    msg.includes("overloaded") ||
+    msg.includes("high demand") ||
+    msg.includes("temporarily unavailable")
+  );
 }
 
 // ─── Types ─────────────────────────────────────────────────
@@ -37,9 +51,6 @@ export async function extractJobInfo(
   apiKey?: string
 ): Promise<JobInfo> {
   const genAI = getGenAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: "gemini-3.6-flash",
-  });
 
   const jobInfoSchema: ResponseSchema = {
     type: SchemaType.OBJECT,
@@ -76,19 +87,26 @@ export async function extractJobInfo(
     required: ["position", "company", "email", "requirements", "location", "subjectInstruction"],
   };
 
-  const result = await model.generateContent({
-    contents: [
-      {
-        role: "user",
-        parts: [
+  let lastError: Error | null = null;
+
+  for (const modelName of GEMINI_MODELS) {
+    try {
+      console.log(`[Gemini] Trying model: ${modelName}`);
+      const model = genAI.getGenerativeModel({ model: modelName });
+
+      const result = await model.generateContent({
+        contents: [
           {
-            inlineData: {
-              data: imageBase64,
-              mimeType: mimeType,
-            },
-          },
-          {
-            text: `Analisis screenshot lowongan kerja ini. Ekstrak informasi berikut dalam bahasa asli yang digunakan di lowongan:
+            role: "user",
+            parts: [
+              {
+                inlineData: {
+                  data: imageBase64,
+                  mimeType: mimeType,
+                },
+              },
+              {
+                text: `Analisis screenshot lowongan kerja ini. Ekstrak informasi berikut dalam bahasa asli yang digunakan di lowongan:
 1. Nama posisi/role
 2. Nama perusahaan
 3. Alamat email tujuan (HR/recruiter) — jika tidak ada, kosongkan
@@ -97,18 +115,30 @@ export async function extractJobInfo(
 6. Instruksi format subject email — perhatikan baik-baik apakah di screenshot ada petunjuk/arahan tentang format subject email yang harus dipakai saat melamar (contoh: "Subject: Lamaran_NamaPosisi_Nama", "Kirim dengan subject: ...", dll). Jika ada, salin persis arahannya. Jika tidak ada arahan spesifik, kosongkan.
 
 Penting: Pastikan email yang diekstrak benar-benar valid dan ada di screenshot. Jangan mengarang email.`,
+              },
+            ],
           },
         ],
-      },
-    ],
-    generationConfig: {
-      responseMimeType: "application/json",
-      responseSchema: jobInfoSchema,
-    },
-  });
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: jobInfoSchema,
+        },
+      });
 
-  const responseText = result.response.text();
-  return JSON.parse(responseText) as JobInfo;
+      const responseText = result.response.text();
+      return JSON.parse(responseText) as JobInfo;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.warn(`[Gemini] Model ${modelName} failed: ${lastError.message}`);
+
+      // Only retry with next model if it's a 503/overload error
+      if (!isModelOverloadError(error)) {
+        throw lastError;
+      }
+    }
+  }
+
+  throw lastError || new Error("All Gemini models failed");
 }
 
 // ─── Generate Email Content ────────────────────────────────
@@ -120,9 +150,6 @@ export async function generateEmail(
   apiKey?: string
 ): Promise<GeneratedEmail> {
   const genAI = getGenAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: "gemini-3.6-flash",
-  });
 
   const emailSchema: ResponseSchema = {
     type: SchemaType.OBJECT,
@@ -225,20 +252,37 @@ STRUKTUR BODY EMAIL:
 - Jangan tambahkan header "Kepada Yth." atau alamat — langsung mulai dari salam pembuka.`,
   });
 
+  let lastError: Error | null = null;
 
-  const result = await model.generateContent({
-    contents: [
-      {
-        role: "user",
-        parts,
-      },
-    ],
-    generationConfig: {
-      responseMimeType: "application/json",
-      responseSchema: emailSchema,
-    },
-  });
+  for (const modelName of GEMINI_MODELS) {
+    try {
+      console.log(`[Gemini] Trying model for email: ${modelName}`);
+      const model = genAI.getGenerativeModel({ model: modelName });
 
-  const responseText = result.response.text();
-  return JSON.parse(responseText) as GeneratedEmail;
+      const result = await model.generateContent({
+        contents: [
+          {
+            role: "user",
+            parts,
+          },
+        ],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: emailSchema,
+        },
+      });
+
+      const responseText = result.response.text();
+      return JSON.parse(responseText) as GeneratedEmail;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.warn(`[Gemini] Model ${modelName} failed for email: ${lastError.message}`);
+
+      if (!isModelOverloadError(error)) {
+        throw lastError;
+      }
+    }
+  }
+
+  throw lastError || new Error("All Gemini models failed");
 }

@@ -9,21 +9,7 @@ function getGenAI(apiKey?: string): GoogleGenerativeAI {
   return new GoogleGenerativeAI(key);
 }
 
-function isModelOverloadError(error: unknown): boolean {
-  const msg = (error as Error)?.message?.toLowerCase() || "";
-  return (
-    msg.includes("503") ||
-    msg.includes("429") ||
-    msg.includes("service unavailable") ||
-    msg.includes("overloaded") ||
-    msg.includes("high demand") ||
-    msg.includes("temporarily unavailable") ||
-    msg.includes("quota") ||
-    msg.includes("rate limit") ||
-    msg.includes("too many requests") ||
-    msg.includes("resource_exhausted")
-  );
-}
+// Error handler removed - we now retry on ANY error
 
 // ─── Types ─────────────────────────────────────────────────
 
@@ -138,11 +124,7 @@ Penting: Pastikan email yang diekstrak benar-benar valid dan ada di screenshot. 
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       console.warn(`[Gemini] Model ${modelName} failed: ${lastError.message}`);
-
-      // Only retry with next model if it's a 503/overload error
-      if (!isModelOverloadError(error)) {
-        throw lastError;
-      }
+      // Continue to next model on ANY error (404, 429, 500, etc)
     }
   }
 
@@ -290,10 +272,7 @@ STRUKTUR BODY EMAIL:
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       console.warn(`[Gemini] Model ${modelName} failed for email: ${lastError.message}`);
-
-      if (!isModelOverloadError(error)) {
-        throw lastError;
-      }
+      // Continue to next model on ANY error
     }
   }
 

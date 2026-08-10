@@ -86,7 +86,7 @@ export default function Home() {
         const base64 = await fileToBase64(file);
         const mimeType = getMimeType(file.name);
 
-        let res = await fetch("/api/extract", {
+        const res = await fetch("/api/extract", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
@@ -98,49 +98,15 @@ export default function Home() {
           }),
         });
 
-        // Fallback: If payload too large and portfolio was provided, retry using only CV
-        if (!res.ok && portfolioBase64) {
-          const isPayloadTooLarge = res.status === 413;
-          let isLargeText = false;
-          
-          if (!isPayloadTooLarge) {
-            const cloneRes = res.clone();
-            const rawText = await cloneRes.text();
-            if (rawText.includes("Request Entity Too Large")) {
-              isLargeText = true;
-            }
-          }
-
-          if (isPayloadTooLarge || isLargeText) {
-            toast.info("File terlalu besar. Mencoba memproses kembali menggunakan CV saja...");
-            res = await fetch("/api/extract", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ 
-                imageBase64: base64, 
-                mimeType,
-                cvBase64,
-                ...getStoredApiKeys(),
-              }),
-            });
-          }
-        }
-
         if (!res.ok) {
           let errorMsg = "Extraction failed";
           const contentType = res.headers.get("content-type") || "";
-          if (res.status === 413) {
-            errorMsg = "Ukuran file terlalu besar (melebihi batas maksimum 4.5MB). Silakan kompres screenshot/CV/Portfolio Anda.";
-          } else if (contentType.includes("application/json")) {
+          if (contentType.includes("application/json")) {
             const errorJson = await res.json();
             errorMsg = errorJson.error || errorMsg;
           } else {
             const rawText = await res.text();
-            if (rawText.includes("Request Entity Too Large")) {
-              errorMsg = "Ukuran total file terlalu besar (maksimal 4.5MB). Harap kurangi ukuran file CV/Portfolio atau resolusi screenshot.";
-            } else {
-              errorMsg = rawText.slice(0, 100) || errorMsg;
-            }
+            errorMsg = rawText.slice(0, 100) || errorMsg;
           }
           throw new Error(errorMsg);
         }

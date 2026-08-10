@@ -197,17 +197,62 @@ export default function Home() {
       const cvBase64 = cvFiles[0] ? await fileToBase64(cvFiles[0]) : undefined;
       const portfolioBase64 = portfolioFiles[0] ? await fileToBase64(portfolioFiles[0]) : undefined;
 
-      const res = await fetch("/api/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const sendPayload = (includePortfolio: boolean) =>
+        JSON.stringify({
           targetEmail: data.email,
           emailSubject: data.emailSubject,
           emailBody: data.emailBody,
           cvBase64,
-          portfolioBase64
-        }),
+          ...(includePortfolio && portfolioBase64 ? { portfolioBase64 } : {}),
+        });
+
+      let res = await fetch("/api/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: sendPayload(true),
       });
+
+      // Fallback: If payload too large and portfolio was included, retry with CV only
+      if (!res.ok && portfolioBase64) {
+        const isPayloadTooLarge = res.status === 413;
+        let isLargeText = false;
+
+        if (!isPayloadTooLarge) {
+          const cloneRes = res.clone();
+          const rawText = await cloneRes.text();
+          if (rawText.includes("Request Entity Too Large")) {
+            isLargeText = true;
+          }
+        }
+
+        if (isPayloadTooLarge || isLargeText) {
+          toast.info("File terlalu besar. Mengirim ulang dengan CV saja (tanpa Portfolio)...");
+          res = await fetch("/api/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: sendPayload(false),
+          });
+        }
+      }
+
+      if (!res.ok) {
+        const contentType = res.headers.get("content-type") || "";
+        let errorMsg = "Gagal mengirim email";
+        if (res.status === 413) {
+          errorMsg = "Ukuran file terlalu besar (melebihi batas 4.5MB). Kompres CV Anda.";
+        } else if (contentType.includes("application/json")) {
+          const errorJson = await res.json();
+          errorMsg = errorJson.error || errorMsg;
+        } else {
+          const rawText = await res.text();
+          if (rawText.includes("Request Entity Too Large")) {
+            errorMsg = "Ukuran total file terlalu besar. Harap kompres CV Anda.";
+          } else {
+            errorMsg = rawText.slice(0, 200) || errorMsg;
+          }
+        }
+        throw new Error(errorMsg);
+      }
 
       const result = await res.json();
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { extractJobInfoWithFallback, generateEmailWithFallback } from "@/lib/ai-provider";
 import type { FileAttachment } from "@/lib/gemini";
+import { cacheFiles } from "@/lib/file-cache";
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -25,6 +26,11 @@ export async function POST(request: NextRequest) {
         { error: "imageBase64 dan mimeType diperlukan" },
         { status: 400 }
       );
+    }
+
+    // Cache CV and Portfolio files server-side for later use by /api/send
+    if (session.user.id) {
+      cacheFiles(session.user.id, cvBase64, portfolioBase64);
     }
 
     // Step 1: Extract job info from screenshot (with fallback)

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { sendEmail } from "@/lib/gmail";
 import { isValidEmail } from "@/lib/utils";
+import { getCachedFiles } from "@/lib/file-cache";
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -15,8 +16,8 @@ export async function POST(request: NextRequest) {
       targetEmail,
       emailSubject,
       emailBody,
-      cvBase64,
-      portfolioBase64,
+      cvBase64: clientCvBase64,
+      portfolioBase64: clientPortfolioBase64,
     } = body;
 
     // Validate required fields
@@ -27,17 +28,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!cvBase64) {
-      return NextResponse.json(
-        { error: "CV harus diupload" },
-        { status: 400 }
-      );
-    }
-
     // Validate email format
     if (!isValidEmail(targetEmail)) {
       return NextResponse.json(
         { error: "Format email tujuan tidak valid" },
+        { status: 400 }
+      );
+    }
+
+    // Get files from server cache first, fallback to request body
+    const cached = getCachedFiles(session.user.id);
+    const cvBase64 = cached.cv?.base64 || clientCvBase64;
+    const portfolioBase64 = cached.portfolio?.base64 || clientPortfolioBase64;
+
+    if (!cvBase64) {
+      return NextResponse.json(
+        { error: "CV tidak ditemukan. Silakan proses ulang screenshot terlebih dahulu." },
         { status: 400 }
       );
     }
@@ -97,3 +103,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

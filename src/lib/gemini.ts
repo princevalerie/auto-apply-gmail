@@ -201,45 +201,54 @@ export async function generateEmail(
     });
   }
 
+  const companyTarget = jobInfo.company && jobInfo.company !== "N/A"
+    ? `Yth. Tim Rekrutmen ${jobInfo.company},`
+    : "Yth. Bapak/Ibu Tim Rekrutmen,";
+
   // Main prompt
   parts.push({
-    text: `Buatkan email lamaran kerja profesional dalam Bahasa Indonesia formal untuk posisi berikut:
+    text: `Buatkan email lamaran kerja profesional, sopan, dan beretika dalam Bahasa Indonesia formal untuk posisi berikut:
 
 Posisi: ${jobInfo.position}
 Perusahaan: ${jobInfo.company}
 ${locationInfo}
 ${requirementsList}
 
-${cvFile ? "File CV pelamar terlampir di atas — baca dan gunakan informasi dari CV (nama lengkap, skill, pengalaman, pendidikan) untuk mempersonalisasi email." : ""}
+${cvFile ? "File CV pelamar terlampir di atas — baca dan gunakan informasi dari CV (nama lengkap, skill, pengalaman, pendidikan, kontak) untuk mempersonalisasi email." : ""}
 ${portfolioFile ? "File portfolio pelamar juga terlampir — gunakan informasi proyek/karya di dalamnya jika relevan." : ""}
 
 Aturan KETAT:
-- DILARANG menggunakan placeholder seperti [NAMA_ANDA], [Nama Anda], [NAMA], atau sejenisnya. Semua informasi HARUS terisi dengan data asli.
+- DILARANG menggunakan placeholder seperti [NAMA_ANDA], [Nama Anda], [NAMA], atau sejenisnya. Semua informasi HARUS terisi dengan data asli dari CV.
 ${cvFile ? "- Ambil nama lengkap pelamar dari CV yang terlampir. Gunakan nama asli tersebut di subject dan body email." : "- Jika tidak ada CV, gunakan nama 'Pelamar' sebagai fallback."}
 - Subject email:
   ${subjectRule}
 
 PANDUAN TONE & GAYA PENULISAN (SANGAT PENTING):
-- Tulis email dengan tone PERCAYA DIRI dan TENANG — bukan desperate/memohon.
-- DILARANG KERAS menggunakan kata/frasa berikut:
+- Tulis email dengan tone SOPAN, PROFESIONAL, PERCAYA DIRI, dan TENANG — bukan robotik dan bukan desperate/memohon.
+- DILARANG KERAS menggunakan kata/frasa klise:
   * "sangat tertarik" / "sangat berminat" / "sangat antusias"
   * "sangat berharap" / "besar harapan saya"
   * "saya mahir" / "saya menguasai" / "saya ahli"
   * "sangat siap" / "siap berkomitmen penuh"
   * kata "sangat" secara umum — hindari sebisa mungkin
-- JANGAN self-claim kemampuan. Alih-alih bilang "saya mahir Python", cukup sebutkan fakta pengalaman: "Selama magang di [perusahaan], saya menggunakan Python untuk [tugas spesifik]".
-- Sebutkan pengalaman/proyek secara FAKTUAL dan singkat, biarkan pembaca yang menilai.
-- Cantumkan informasi kontak (Nomor HP dan Email) pelamar yang ditemukan di CV pada bagian bawah body email/setelah salam penutup.
-- Jangan terlalu menjual diri. Cukup sampaikan fakta relevan dengan ringkas.
+- JANGAN self-claim kemampuan. Sebutkan fakta pengalaman dan portofolio secara FAKTUAL dan singkat.
+- Jangan terlalu menjual diri. Cukup sampaikan fakta relevan dengan ringkas dan elegan.
 
-STRUKTUR BODY EMAIL:
-- Salam pembuka langsung (WAJIB gunakan: "Selamat ${timeGreeting},")
-- Paragraf 1: Perkenalan singkat (nama, status pendidikan/pekerjaan saat ini) + tujuan melamar posisi apa di perusahaan mana. Cukup 1-2 kalimat.
-- Paragraf 2: Sebutkan 1-2 pengalaman/proyek yang PALING RELEVAN dengan posisi yang dilamar secara faktual. Jangan daftar semua skill. Cukup 2-3 kalimat.
-- Paragraf 3: Kalimat penutup singkat — sebutkan ${portfolioFile ? "CV dan portfolio" : "CV"} terlampir, ucapkan terima kasih. Cukup 1-2 kalimat. JANGAN bilang "berharap dapat berdiskusi" atau sejenisnya.
-- Salam penutup + nama asli pelamar.
-- TOTAL body email MAKSIMAL 6-8 kalimat. Lebih pendek lebih baik.
-- Jangan tambahkan header "Kepada Yth." atau alamat — langsung mulai dari salam pembuka.`,
+STRUKTUR BODY EMAIL (WAJIB IKUTI FORMAT INI):
+1. Baris Sapaan Penerima: "${companyTarget}"
+2. Baris Salam Pembuka: "Selamat pagi/siang Bapak/Ibu," (atau "Dengan hormat,")
+3. Paragraf 1 (Perkenalan Luwes & Maksud):
+   Mulai dengan gaya mengalir sopan, contoh: "Perkenalkan, saya [Nama Lengkap Asli], [status pendidikan/latar belakang dari CV]. Melalui email ini, saya bermaksud mengajukan lamaran untuk posisi ${jobInfo.position} di ${jobInfo.company}." (Cukup 1-2 kalimat).
+4. Paragraf 2 (Kualifikasi & Pengalaman Relevan):
+   Sebutkan 1-2 pengalaman/proyek/alat kerja yang PALING RELEVAN secara faktual berdasarkan CV. Cukup 2-3 kalimat.
+5. Paragraf 3 (Lampiran & Ucapan Terima Kasih):
+   "Sebagai bahan pertimbangan, bersama email ini saya lampirkan ${portfolioFile ? "CV dan portofolio" : "CV"} saya. Terima kasih atas waktu dan kesempatan yang Bapak/Ibu berikan." (Cukup 1-2 kalimat).
+6. Tanda Tangan & Kontak Rapi:
+   Hormat saya,
+   [Nama Lengkap Asli Pelamar]
+   [Nomor HP/WhatsApp berformat rapi, contoh: +62 812-xxxx-xxxx] | [Email Pelamar]
+
+TOTAL body email: 6-8 kalimat. Ringkas, sopan, dan berbobot.`,
   });
 
   let lastError: Error | null = null;

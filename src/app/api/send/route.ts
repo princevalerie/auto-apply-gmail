@@ -3,8 +3,8 @@ import { auth } from "@/lib/auth";
 import { sendEmail } from "@/lib/gmail";
 import { isValidEmail } from "@/lib/utils";
 import { getCachedFiles } from "@/lib/file-cache";
-import { saveApplication, getUserFile } from "@/lib/db";
-import { downloadFileFromS3Url } from "@/lib/s3";
+import { saveApplication, getUserFile, saveFileRecord, upsertUser } from "@/lib/db";
+import { downloadFileFromS3Url, uploadFileToS3 } from "@/lib/s3";
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -18,8 +18,8 @@ export async function POST(request: NextRequest) {
     const targetEmail = formData.get("targetEmail") as string;
     const emailSubject = formData.get("emailSubject") as string;
     const emailBody = formData.get("emailBody") as string;
-    const position = formData.get("position") as string || "";
-    const company = formData.get("company") as string || "";
+    const position = (formData.get("position") as string) || "Posisi Lamaran";
+    const company = (formData.get("company") as string) || "Perusahaan";
     const portfolioFile = formData.get("portfolio") as File | null;
 
     // Validate required fields
@@ -37,6 +37,14 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Ensure user exists in PostgreSQL (prevents foreign key errors)
+    await upsertUser({
+      id: session.user.id,
+      name: session.user.name,
+      email: session.user.email,
+      image: session.user.image,
+    }).catch(err => console.warn("[Send] upsertUser warning:", err));
 
     // Get CV: try memory cache first, then S3 storage
     let cvBuffer: Buffer | null = null;
@@ -59,7 +67,7 @@ export async function POST(request: NextRequest) {
 
     if (!cvBuffer) {
       return NextResponse.json(
-        { error: "CV tidak ditemukan. Silakan proses ulang screenshot terlebih dahulu." },
+        { error: "CV tidak ditemukan. Silakan upload CV terlebih dahulu." },
         { status: 400 }
       );
     }
@@ -76,11 +84,35 @@ export async function POST(request: NextRequest) {
     // Portfolio from FormData binary file (if provided)
     if (portfolioFile) {
       const portfolioBytes = await portfolioFile.arrayBuffer();
+      const portfolioBuffer = Buffer.from(portfolioBytes);
       attachments.push({
         filename: "Portfolio.pdf",
-        content: Buffer.from(portfolioBytes),
+        content: portfolioBuffer,
         mimeType: "application/pdf",
       });
+
+      // Persist portfolio to Neon S3 Storage & PostgreSQL
+      try {
+        const s3Res = await uploadFileToS3({
+          userId: session.user.id,
+          fileType: "portfolio",
+          fileName: portfolioFile.name || "Portfolio.pdf",
+          fileBuffer: portfolioBuffer,
+          mimeType: "application/pdf",
+        });
+
+        await saveFileRecord({
+          userId: session.user.id,
+          fileType: "portfolio",
+          fileName: portfolioFile.name || "Portfolio.pdf",
+          fileUrl: s3Res.url,
+          fileSize: portfolioBuffer.length,
+          mimeType: "application/pdf",
+        });
+        console.log("[Send] Portfolio successfully saved to S3 & Database");
+      } catch (saveErr) {
+        console.warn("[Send] Could not persist Portfolio to S3/DB:", (saveErr as Error).message);
+      }
     } else {
       // Fallback: get portfolio from S3 if user uploaded before
       try {
@@ -110,7 +142,7 @@ export async function POST(request: NextRequest) {
       attachments,
     });
 
-    // Save application history to database (non-blocking)
+    // Save application history to database
     try {
       await saveApplication({
         userId: session.user.id,
@@ -122,10 +154,11 @@ export async function POST(request: NextRequest) {
         gmailMessageId: result.messageId,
         status: result.success ? "sent" : "failed",
       });
+      console.log("[Send] Application saved to database successfully");
     } catch (dbErr) {
-      // Don't fail the send if DB save fails
-      console.warn("[Send] Failed to save application record:", (dbErr as Error).message);
+      console.error("[Send] Failed to save application record:", (dbErr as Error).message);
     }
+
 
     if (result.success) {
       return NextResponse.json({

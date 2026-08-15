@@ -3,6 +3,8 @@ import { auth } from "@/lib/auth";
 import { extractJobInfoWithFallback, generateEmailWithFallback } from "@/lib/ai-provider";
 import type { FileAttachment } from "@/lib/gemini";
 import { cacheFiles } from "@/lib/file-cache";
+import { uploadFileToS3 } from "@/lib/s3";
+import { saveFileRecord, upsertUser } from "@/lib/db";
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -27,9 +29,43 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Cache CV server-side for later use by /api/send (portfolio NOT cached — sent directly at send time)
+    // Ensure user exists in database
+    if (session.user.id) {
+      await upsertUser({
+        id: session.user.id,
+        name: session.user.name,
+        email: session.user.email,
+        image: session.user.image,
+      }).catch(err => console.warn("[Extract] upsertUser warning:", err));
+    }
+
+    // Cache CV server-side for immediate email sending
     if (session.user.id && cvBase64) {
       cacheFiles(session.user.id, cvBase64);
+
+      // Also persist CV to Neon S3 Storage & PostgreSQL
+      try {
+        const cvBuffer = Buffer.from(cvBase64, "base64");
+        const s3Res = await uploadFileToS3({
+          userId: session.user.id,
+          fileType: "cv",
+          fileName: "CV.pdf",
+          fileBuffer: cvBuffer,
+          mimeType: "application/pdf",
+        });
+
+        await saveFileRecord({
+          userId: session.user.id,
+          fileType: "cv",
+          fileName: "CV.pdf",
+          fileUrl: s3Res.url,
+          fileSize: cvBuffer.length,
+          mimeType: "application/pdf",
+        });
+        console.log("[Extract] CV successfully saved to S3 & Database");
+      } catch (saveErr) {
+        console.warn("[Extract] Could not persist CV to S3/DB:", (saveErr as Error).message);
+      }
     }
 
     // Step 1: Extract job info from screenshot (with fallback)

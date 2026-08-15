@@ -149,6 +149,14 @@ export async function getUserFiles(userId: string) {
   return result;
 }
 
+export async function deleteUserFile(userId: string, fileType: "cv" | "portfolio") {
+  const db = getSQL();
+  await db`
+    DELETE FROM user_files 
+    WHERE user_id = ${userId} AND file_type = ${fileType}
+  `;
+}
+
 // ─── Application Operations ─────────────────────────────────
 
 export async function saveApplication(params: {

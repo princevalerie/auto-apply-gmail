@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
-import { ArrowRight, Loader2, Sparkles, Send, CheckCircle2, FileText, Cpu } from "lucide-react";
-import { FileUploadZone } from "@/components/file-upload-zone";
+import { ArrowRight, Loader2, Sparkles, Send, CheckCircle2, FileText, Cpu, Cloud } from "lucide-react";
+import { FileUploadZone, type SavedFileInfo } from "@/components/file-upload-zone";
 import { ApplicationCard } from "@/components/application-card";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { toast } from "sonner";
@@ -36,6 +36,13 @@ export default function Home() {
   const [screenshots, setScreenshots] = useState<File[]>([]);
   const [cvFiles, setCvFiles] = useState<File[]>([]);
   const [portfolioFiles, setPortfolioFiles] = useState<File[]>([]);
+
+  // Cloud saved files
+  const [savedCv, setSavedCv] = useState<SavedFileInfo | null>(null);
+  const [savedPortfolio, setSavedPortfolio] = useState<SavedFileInfo | null>(null);
+  const [isLoadingSavedFiles, setIsLoadingSavedFiles] = useState(false);
+  const [isUploadingCv, setIsUploadingCv] = useState(false);
+  const [isUploadingPortfolio, setIsUploadingPortfolio] = useState(false);
   
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractionProgress, setExtractionProgress] = useState(0);
@@ -44,6 +51,31 @@ export default function Home() {
   const [sendStates, setSendStates] = useState<Record<number, SendState>>({});
   const [showConfirm, setShowConfirm] = useState(false);
   const [sendingAll, setSendingAll] = useState(false);
+
+  // Fetch saved files from database on login/load
+  const fetchSavedFiles = useCallback(async () => {
+    try {
+      setIsLoadingSavedFiles(true);
+      const res = await fetch("/api/user/files");
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          setSavedCv(json.data.cv);
+          setSavedPortfolio(json.data.portfolio);
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to fetch saved files:", err);
+    } finally {
+      setIsLoadingSavedFiles(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (session?.user?.id) {
+      fetchSavedFiles();
+    }
+  }, [session?.user?.id, fetchSavedFiles]);
 
   const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -58,14 +90,96 @@ export default function Home() {
     });
   };
 
+  // Upload CV immediately to S3 & Database when selected
+  const handleCvChange = async (files: File[]) => {
+    setCvFiles(files);
+    if (files.length > 0) {
+      const file = files[0];
+      setIsUploadingCv(true);
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("fileType", "cv");
+
+      try {
+        const res = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+        if (res.ok) {
+          toast.success("CV berhasil disimpan ke cloud database!");
+          await fetchSavedFiles();
+          setCvFiles([]); // Clear local selection once synced
+        } else {
+          toast.error("Gagal mengupload CV ke cloud");
+        }
+      } catch (err) {
+        toast.error("Error upload CV ke cloud");
+      } finally {
+        setIsUploadingCv(false);
+      }
+    }
+  };
+
+  // Upload Portfolio immediately to S3 & Database when selected
+  const handlePortfolioChange = async (files: File[]) => {
+    setPortfolioFiles(files);
+    if (files.length > 0) {
+      const file = files[0];
+      setIsUploadingPortfolio(true);
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("fileType", "portfolio");
+
+      try {
+        const res = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+        if (res.ok) {
+          toast.success("Portfolio berhasil disimpan ke cloud database!");
+          await fetchSavedFiles();
+          setPortfolioFiles([]); // Clear local selection once synced
+        } else {
+          toast.error("Gagal mengupload Portfolio ke cloud");
+        }
+      } catch (err) {
+        toast.error("Error upload Portfolio ke cloud");
+      } finally {
+        setIsUploadingPortfolio(false);
+      }
+    }
+  };
+
+  // Delete saved file from Cloud
+  const handleDeleteSavedFile = async (type: "cv" | "portfolio") => {
+    try {
+      const res = await fetch(`/api/user/files?type=${type}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        if (type === "cv") {
+          setSavedCv(null);
+          setCvFiles([]);
+        } else {
+          setSavedPortfolio(null);
+          setPortfolioFiles([]);
+        }
+        toast.success(`${type === "cv" ? "CV" : "Portfolio"} berhasil dihapus dari cloud`);
+      }
+    } catch (err) {
+      toast.error("Gagal menghapus file dari cloud");
+    }
+  };
+
   // Extract job info from all screenshots
   const handleExtract = async () => {
     if (screenshots.length === 0) {
       toast.error("Upload minimal 1 screenshot lowongan");
       return;
     }
-    if (cvFiles.length === 0) {
-      toast.error("CV wajib diupload");
+    const hasCv = cvFiles.length > 0 || Boolean(savedCv);
+    if (!hasCv) {
+      toast.error("Upload CV terlebih dahulu");
       return;
     }
 
@@ -76,7 +190,7 @@ export default function Home() {
 
     const extractedResults: ExtractionResult[] = [];
     
-    // Prepare CV base64 once (portfolio NOT sent to AI — not needed for extraction)
+    // Prepare CV base64 if a local file was chosen
     const cvBase64 = cvFiles[0] ? await fileToBase64(cvFiles[0]) : undefined;
 
     for (let i = 0; i < screenshots.length; i++) {
@@ -276,8 +390,11 @@ export default function Home() {
               description="PDF — Maksimal 10MB"
               icon="pdf"
               files={cvFiles}
-              onFilesChange={setCvFiles}
+              onFilesChange={handleCvChange}
               disabled={isExtracting}
+              savedFile={savedCv}
+              onDeleteSavedFile={() => handleDeleteSavedFile("cv")}
+              isUploading={isUploadingCv}
             />
 
             <FileUploadZone
@@ -288,8 +405,11 @@ export default function Home() {
               description="PDF — Maksimal 10MB"
               icon="pdf"
               files={portfolioFiles}
-              onFilesChange={setPortfolioFiles}
+              onFilesChange={handlePortfolioChange}
               disabled={isExtracting}
+              savedFile={savedPortfolio}
+              onDeleteSavedFile={() => handleDeleteSavedFile("portfolio")}
+              isUploading={isUploadingPortfolio}
             />
           </div>
 
@@ -320,7 +440,7 @@ export default function Home() {
             </div>
 
             {/* Extract button */}
-            {screenshots.length > 0 && cvFiles.length > 0 && !isExtracting && (
+            {screenshots.length > 0 && (cvFiles.length > 0 || savedCv) && !isExtracting && (
               <button
                 onClick={handleExtract}
                 className="btn-primary w-full mt-6 py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 group"

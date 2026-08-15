@@ -1,0 +1,93 @@
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { getUserFiles, deleteUserFile, getUserFile } from "@/lib/db";
+import { deleteFileFromS3 } from "@/lib/s3";
+
+export async function GET() {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const files = await getUserFiles(session.user.id);
+    
+    let cv = null;
+    let portfolio = null;
+
+    for (const f of files) {
+      if (f.file_type === "cv" && !cv) {
+        cv = {
+          id: f.id,
+          fileName: f.file_name,
+          fileUrl: f.file_url,
+          fileSize: f.file_size,
+          mimeType: f.mime_type,
+          createdAt: f.created_at,
+        };
+      } else if (f.file_type === "portfolio" && !portfolio) {
+        portfolio = {
+          id: f.id,
+          fileName: f.file_name,
+          fileUrl: f.file_url,
+          fileSize: f.file_size,
+          mimeType: f.mime_type,
+          createdAt: f.created_at,
+        };
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: { cv, portfolio },
+    });
+  } catch (error) {
+    console.error("Get user files error:", error);
+    return NextResponse.json(
+      { error: (error as Error).message },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const fileType = searchParams.get("type") as "cv" | "portfolio";
+
+    if (!fileType || !["cv", "portfolio"].includes(fileType)) {
+      return NextResponse.json({ error: "Invalid file type" }, { status: 400 });
+    }
+
+    const existingFile = await getUserFile(session.user.id, fileType);
+    if (existingFile) {
+      // Delete from S3 if possible
+      try {
+        const endpoint = process.env.AWS_ENDPOINT_URL_S3!;
+        const prefix = `${endpoint}/autoapply-files/`;
+        if (existingFile.file_url.startsWith(prefix)) {
+          const key = existingFile.file_url.slice(prefix.length);
+          await deleteFileFromS3(key);
+        }
+      } catch (s3Err) {
+        console.warn("[Delete] S3 deletion error:", s3Err);
+      }
+
+      // Delete from PostgreSQL
+      await deleteUserFile(session.user.id, fileType);
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Delete file error:", error);
+    return NextResponse.json(
+      { error: (error as Error).message },
+      { status: 500 }
+    );
+  }
+}

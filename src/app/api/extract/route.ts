@@ -3,8 +3,8 @@ import { auth } from "@/lib/auth";
 import { extractJobInfoWithFallback, generateEmailWithFallback } from "@/lib/ai-provider";
 import type { FileAttachment } from "@/lib/gemini";
 import { cacheFiles } from "@/lib/file-cache";
-import { uploadFileToS3 } from "@/lib/s3";
-import { saveFileRecord, upsertUser } from "@/lib/db";
+import { uploadFileToS3, downloadFileFromS3Url } from "@/lib/s3";
+import { saveFileRecord, upsertUser, getUserFile } from "@/lib/db";
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -39,11 +39,12 @@ export async function POST(request: NextRequest) {
       }).catch(err => console.warn("[Extract] upsertUser warning:", err));
     }
 
-    // Cache CV server-side for immediate email sending
+    let effectiveCvBase64 = cvBase64;
+
+    // If new CV was uploaded, persist it to S3 & Database
     if (session.user.id && cvBase64) {
       cacheFiles(session.user.id, cvBase64);
 
-      // Also persist CV to Neon S3 Storage & PostgreSQL
       try {
         const cvBuffer = Buffer.from(cvBase64, "base64");
         const s3Res = await uploadFileToS3({
@@ -66,6 +67,19 @@ export async function POST(request: NextRequest) {
       } catch (saveErr) {
         console.warn("[Extract] Could not persist CV to S3/DB:", (saveErr as Error).message);
       }
+    } else if (!effectiveCvBase64 && session.user.id) {
+      // If no CV uploaded in this session, auto-load saved CV from S3/Database
+      try {
+        const savedCv = await getUserFile(session.user.id, "cv");
+        if (savedCv?.file_url) {
+          const cvBuffer = await downloadFileFromS3Url(savedCv.file_url);
+          effectiveCvBase64 = cvBuffer.toString("base64");
+          cacheFiles(session.user.id, effectiveCvBase64);
+          console.log("[Extract] Auto-loaded saved CV from Cloud for AI analysis");
+        }
+      } catch (loadErr) {
+        console.warn("[Extract] Failed to auto-load saved CV from S3:", (loadErr as Error).message);
+      }
     }
 
     // Step 1: Extract job info from screenshot (with fallback)
@@ -80,9 +94,9 @@ export async function POST(request: NextRequest) {
     // Step 2: Prepare CV for AI email generation (portfolio NOT sent here — attached at send time)
     let cvFile: FileAttachment | null = null;
 
-    if (cvBase64) {
+    if (effectiveCvBase64) {
       cvFile = {
-        base64: cvBase64,
+        base64: effectiveCvBase64,
         mimeType: "application/pdf",
       };
     }

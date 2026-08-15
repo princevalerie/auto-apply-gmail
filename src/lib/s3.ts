@@ -86,18 +86,48 @@ export async function downloadFileFromS3(key: string): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
+// ─── Extract S3 Key from URL / Path ─────────────────────────
+
+export function extractS3Key(fileUrl: string): string {
+  if (!fileUrl) return "";
+
+  // 1. If URL contains /<bucket_name>/...
+  if (fileUrl.includes(`/${BUCKET_NAME}/`)) {
+    return fileUrl.split(`/${BUCKET_NAME}/`)[1];
+  }
+
+  // 2. If URL contains users/<userId>/...
+  if (fileUrl.includes("users/")) {
+    return fileUrl.slice(fileUrl.indexOf("users/"));
+  }
+
+  // 3. If it's a full URL (https://endpoint/bucket/key or path-style)
+  if (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")) {
+    try {
+      const urlObj = new URL(fileUrl);
+      const pathname = urlObj.pathname.replace(/^\/+/, ""); // remove leading slash
+      if (pathname.startsWith(`${BUCKET_NAME}/`)) {
+        return pathname.slice(BUCKET_NAME.length + 1);
+      }
+      return pathname;
+    } catch {
+      // Ignore parse error and fallback
+    }
+  }
+
+  // 4. Return as-is if it's already a relative key
+  return fileUrl.replace(/^\/+/, "");
+}
+
 // ─── Download File from S3 URL ──────────────────────────────
 
 export async function downloadFileFromS3Url(fileUrl: string): Promise<Buffer> {
-  // Extract key from URL: https://endpoint/bucket/key
-  const endpoint = process.env.AWS_ENDPOINT_URL_S3!;
-  const prefix = `${endpoint}/${BUCKET_NAME}/`;
-
-  if (!fileUrl.startsWith(prefix)) {
-    throw new Error(`Invalid S3 URL: ${fileUrl}`);
+  const key = extractS3Key(fileUrl);
+  if (!key) {
+    throw new Error(`Tidak dapat mengekstrak S3 key dari URL: ${fileUrl}`);
   }
 
-  const key = fileUrl.slice(prefix.length);
+  console.log(`[S3] Downloading from extracted key: "${key}" (original: "${fileUrl}")`);
   return downloadFileFromS3(key);
 }
 
@@ -114,4 +144,15 @@ export async function deleteFileFromS3(key: string): Promise<void> {
   );
 
   console.log(`[S3] Deleted: ${key}`);
+}
+
+// ─── Delete File from S3 URL ────────────────────────────────
+
+export async function deleteFileFromS3Url(fileUrl: string): Promise<void> {
+  const key = extractS3Key(fileUrl);
+  if (!key) {
+    console.warn(`[S3] Could not extract key to delete: ${fileUrl}`);
+    return;
+  }
+  return deleteFileFromS3(key);
 }

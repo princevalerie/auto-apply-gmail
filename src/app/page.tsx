@@ -32,7 +32,7 @@ interface SendState {
 }
 
 export default function Home() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const [screenshots, setScreenshots] = useState<File[]>([]);
   const [cvFiles, setCvFiles] = useState<File[]>([]);
   const [portfolioFiles, setPortfolioFiles] = useState<File[]>([]);
@@ -63,6 +63,8 @@ export default function Home() {
           setSavedCv(json.data.cv);
           setSavedPortfolio(json.data.portfolio);
         }
+      } else {
+        console.warn("[Files] Failed to fetch saved files, status:", res.status);
       }
     } catch (err) {
       console.warn("Failed to fetch saved files:", err);
@@ -77,6 +79,8 @@ export default function Home() {
     }
   }, [session?.user?.id, fetchSavedFiles]);
 
+  const isCheckingCloudFiles = isLoadingSavedFiles || status === "loading";
+
   const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -90,7 +94,7 @@ export default function Home() {
     });
   };
 
-  // Upload CV immediately to S3 & Database when selected
+  // Upload CV immediately to S3 & Database when selected (or overwritten)
   const handleCvChange = async (files: File[]) => {
     setCvFiles(files);
     if (files.length > 0) {
@@ -105,22 +109,23 @@ export default function Home() {
           method: "POST",
           body: formData,
         });
-        if (res.ok) {
-          toast.success("CV berhasil disimpan ke cloud database!");
+        const json = await res.json().catch(() => ({}));
+        if (res.ok && json.success) {
+          toast.success(`CV "${file.name}" berhasil disimpan & diperbarui di cloud!`);
           await fetchSavedFiles();
           setCvFiles([]); // Clear local selection once synced
         } else {
-          toast.error("Gagal mengupload CV ke cloud");
+          toast.error(json.error || "Gagal mengupload CV ke cloud");
         }
       } catch (err) {
-        toast.error("Error upload CV ke cloud");
+        toast.error(`Error upload CV: ${(err as Error).message}`);
       } finally {
         setIsUploadingCv(false);
       }
     }
   };
 
-  // Upload Portfolio immediately to S3 & Database when selected
+  // Upload Portfolio immediately to S3 & Database when selected (or overwritten)
   const handlePortfolioChange = async (files: File[]) => {
     setPortfolioFiles(files);
     if (files.length > 0) {
@@ -135,15 +140,16 @@ export default function Home() {
           method: "POST",
           body: formData,
         });
-        if (res.ok) {
-          toast.success("Portfolio berhasil disimpan ke cloud database!");
+        const json = await res.json().catch(() => ({}));
+        if (res.ok && json.success) {
+          toast.success(`Portfolio "${file.name}" berhasil disimpan & diperbarui di cloud!`);
           await fetchSavedFiles();
           setPortfolioFiles([]); // Clear local selection once synced
         } else {
-          toast.error("Gagal mengupload Portfolio ke cloud");
+          toast.error(json.error || "Gagal mengupload Portfolio ke cloud");
         }
       } catch (err) {
-        toast.error("Error upload Portfolio ke cloud");
+        toast.error(`Error upload Portfolio: ${(err as Error).message}`);
       } finally {
         setIsUploadingPortfolio(false);
       }
@@ -192,6 +198,9 @@ export default function Home() {
     
     // Prepare CV base64 if a local file was chosen
     const cvBase64 = cvFiles[0] ? await fileToBase64(cvFiles[0]) : undefined;
+    if (!cvFiles[0] && savedCv) {
+      toast.info(`Menggunakan CV di Cloud: ${savedCv.fileName}`);
+    }
 
     for (let i = 0; i < screenshots.length; i++) {
       try {
@@ -372,14 +381,23 @@ export default function Home() {
           
           {/* Document Uploads */}
           <div className="card-elevated p-6 space-y-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                <FileText className="w-5 h-5 text-white" />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+                  <FileText className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold">Dokumen Anda</h2>
+                  <p className="text-xs text-muted-foreground">CV dan Portfolio (PDF)</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-lg font-semibold">Dokumen Anda</h2>
-                <p className="text-xs text-muted-foreground">Upload CV dan Portfolio (PDF)</p>
-              </div>
+
+              {savedCv && !isCheckingCloudFiles && (
+                <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 shadow-sm shadow-emerald-500/10">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  CV Siap
+                </span>
+              )}
             </div>
 
             <FileUploadZone
@@ -395,6 +413,7 @@ export default function Home() {
               savedFile={savedCv}
               onDeleteSavedFile={() => handleDeleteSavedFile("cv")}
               isUploading={isUploadingCv}
+              isLoading={isCheckingCloudFiles}
             />
 
             <FileUploadZone
@@ -410,6 +429,7 @@ export default function Home() {
               savedFile={savedPortfolio}
               onDeleteSavedFile={() => handleDeleteSavedFile("portfolio")}
               isUploading={isUploadingPortfolio}
+              isLoading={isCheckingCloudFiles}
             />
           </div>
 

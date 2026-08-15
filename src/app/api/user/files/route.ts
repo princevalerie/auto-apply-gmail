@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getUserFiles, deleteUserFile, getUserFile } from "@/lib/db";
-import { deleteFileFromS3 } from "@/lib/s3";
+import { deleteFileFromS3Url } from "@/lib/s3";
 
 export async function GET() {
   const session = await auth();
@@ -68,18 +68,14 @@ export async function DELETE(request: NextRequest) {
     if (existingFile) {
       // Delete from S3 if possible
       try {
-        const endpoint = process.env.AWS_ENDPOINT_URL_S3!;
-        const prefix = `${endpoint}/autoapply-files/`;
-        if (existingFile.file_url.startsWith(prefix)) {
-          const key = existingFile.file_url.slice(prefix.length);
-          await deleteFileFromS3(key);
-        }
+        await deleteFileFromS3Url(existingFile.file_url);
       } catch (s3Err) {
         console.warn("[Delete] S3 deletion error:", s3Err);
       }
 
       // Delete from PostgreSQL
       await deleteUserFile(session.user.id, fileType);
+      console.log(`[UserFiles] Deleted ${fileType} for user ${session.user.id}`);
     }
 
     return NextResponse.json({ success: true });

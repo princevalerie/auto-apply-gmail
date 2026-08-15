@@ -15,67 +15,75 @@ export const sql = getSQL();
 
 // ─── Initialize Database Schema ──────────────────────────────
 
+let isSchemaInitialized = false;
+
 export async function initDatabase() {
+  if (isSchemaInitialized) return;
   const db = getSQL();
 
-  // Create users table
-  await db`
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      name TEXT,
-      email TEXT UNIQUE,
-      image TEXT,
-      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    )
-  `;
+  try {
+    // Create users table
+    await db`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        email TEXT UNIQUE,
+        image TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `;
 
-  // Create user_files table (stores metadata + S3 URL, NOT binary)
-  await db`
-    CREATE TABLE IF NOT EXISTS user_files (
-      id SERIAL PRIMARY KEY,
-      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      file_type VARCHAR(20) NOT NULL CHECK (file_type IN ('cv', 'portfolio')),
-      file_name TEXT NOT NULL,
-      file_url TEXT NOT NULL,
-      file_size INTEGER,
-      mime_type TEXT DEFAULT 'application/pdf',
-      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    )
-  `;
+    // Create user_files table (stores metadata + S3 URL, NOT binary)
+    await db`
+      CREATE TABLE IF NOT EXISTS user_files (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        file_type VARCHAR(20) NOT NULL CHECK (file_type IN ('cv', 'portfolio')),
+        file_name TEXT NOT NULL,
+        file_url TEXT NOT NULL,
+        file_size INTEGER,
+        mime_type TEXT DEFAULT 'application/pdf',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `;
 
-  // Create index for faster file lookups
-  await db`
-    CREATE INDEX IF NOT EXISTS idx_user_files_user_type 
-    ON user_files(user_id, file_type)
-  `;
+    // Create index for faster file lookups
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_user_files_user_type 
+      ON user_files(user_id, file_type)
+    `;
 
-  // Create applications table (job application history)
-  await db`
-    CREATE TABLE IF NOT EXISTS applications (
-      id SERIAL PRIMARY KEY,
-      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      position TEXT NOT NULL,
-      company TEXT NOT NULL,
-      target_email TEXT NOT NULL,
-      email_subject TEXT,
-      email_body TEXT,
-      location TEXT,
-      requirements JSONB DEFAULT '[]',
-      ai_provider TEXT,
-      gmail_message_id TEXT,
-      status VARCHAR(20) DEFAULT 'sent' CHECK (status IN ('sent', 'failed', 'draft')),
-      sent_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    )
-  `;
+    // Create applications table (job application history)
+    await db`
+      CREATE TABLE IF NOT EXISTS applications (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        position TEXT NOT NULL,
+        company TEXT NOT NULL,
+        target_email TEXT NOT NULL,
+        email_subject TEXT,
+        email_body TEXT,
+        location TEXT,
+        requirements JSONB DEFAULT '[]',
+        ai_provider TEXT,
+        gmail_message_id TEXT,
+        status VARCHAR(20) DEFAULT 'sent' CHECK (status IN ('sent', 'failed', 'draft')),
+        sent_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `;
 
-  // Create index for user application history
-  await db`
-    CREATE INDEX IF NOT EXISTS idx_applications_user 
-    ON applications(user_id, sent_at DESC)
-  `;
+    // Create index for user application history
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_applications_user 
+      ON applications(user_id, sent_at DESC)
+    `;
 
-  console.log("[DB] Database schema initialized successfully");
+    isSchemaInitialized = true;
+    console.log("[DB] Database schema initialized successfully");
+  } catch (schemaErr) {
+    console.warn("[DB] Schema init warning:", schemaErr);
+  }
 }
 
 // ─── User Operations ─────────────────────────────────────────
@@ -86,6 +94,7 @@ export async function upsertUser(user: {
   email?: string | null;
   image?: string | null;
 }) {
+  await initDatabase();
   const db = getSQL();
   await db`
     INSERT INTO users (id, name, email, image, updated_at)
@@ -108,7 +117,15 @@ export async function saveFileRecord(params: {
   fileSize?: number;
   mimeType?: string;
 }) {
+  await initDatabase();
   const db = getSQL();
+
+  // Ensure user exists first to prevent foreign key violations
+  await db`
+    INSERT INTO users (id, updated_at)
+    VALUES (${params.userId}, NOW())
+    ON CONFLICT (id) DO NOTHING
+  `.catch(err => console.warn("[DB] Ensure user error:", err));
 
   // Delete previous file of same type for this user (keep only latest)
   await db`
@@ -127,6 +144,7 @@ export async function saveFileRecord(params: {
 }
 
 export async function getUserFile(userId: string, fileType: "cv" | "portfolio") {
+  await initDatabase();
   const db = getSQL();
   const result = await db`
     SELECT id, file_name, file_url, file_size, mime_type, created_at
@@ -139,6 +157,7 @@ export async function getUserFile(userId: string, fileType: "cv" | "portfolio") 
 }
 
 export async function getUserFiles(userId: string) {
+  await initDatabase();
   const db = getSQL();
   const result = await db`
     SELECT id, file_type, file_name, file_url, file_size, mime_type, created_at

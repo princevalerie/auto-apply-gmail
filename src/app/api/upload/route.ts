@@ -18,22 +18,32 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    // Validate file type
-    const allowedTypes = [
-      "image/png",
-      "image/jpeg",
-      "image/jpg",
-      "image/webp",
-      "application/pdf",
-    ];
+    // Validate file type (robust checks for PDF and images)
+    const fileNameLower = file.name.toLowerCase();
+    const isPdf =
+      fileNameLower.endsWith(".pdf") ||
+      file.type === "application/pdf" ||
+      file.type.toLowerCase().includes("pdf");
 
-    if (!allowedTypes.includes(file.type)) {
-      return NextResponse.json({ error: "File type not supported" }, { status: 400 });
+    const isImage =
+      file.type.startsWith("image/") ||
+      /\.(png|jpe?g|webp)$/i.test(fileNameLower);
+
+    if (!isPdf && !isImage) {
+      return NextResponse.json(
+        { error: `Format file "${file.name}" tidak didukung. Harap upload file PDF atau gambar.` },
+        { status: 400 }
+      );
     }
+
+    const mimeType = isPdf ? "application/pdf" : file.type || "image/png";
 
     // Maximum size: 10MB
     if (file.size > 10 * 1024 * 1024) {
-      return NextResponse.json({ error: "File size exceeds 10MB limit" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Ukuran file melebihi batas maksimal 10MB" },
+        { status: 400 }
+      );
     }
 
     const bytes = await file.arrayBuffer();
@@ -45,7 +55,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       name: session.user.name,
       email: session.user.email,
       image: session.user.image,
-    });
+    }).catch((err) => console.warn("[Upload] upsertUser warning:", err));
 
     // Upload to S3 storage
     const s3Result = await uploadFileToS3({
@@ -53,7 +63,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       fileType: fileType as "cv" | "portfolio",
       fileName: file.name,
       fileBuffer: buffer,
-      mimeType: file.type,
+      mimeType,
     });
 
     // Save file metadata to database
@@ -63,12 +73,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       fileName: file.name,
       fileUrl: s3Result.url,
       fileSize: file.size,
-      mimeType: file.type,
+      mimeType,
     });
 
+    console.log(`[Upload] Successfully uploaded and saved ${fileType} for user ${session.user.id}`);
+
     return NextResponse.json({
+      success: true,
       url: s3Result.url,
       key: s3Result.key,
+      fileName: file.name,
+      fileSize: file.size,
     });
   } catch (error) {
     console.error("Upload error:", error);

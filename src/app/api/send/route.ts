@@ -11,14 +11,12 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
-    const {
-      targetEmail,
-      emailSubject,
-      emailBody,
-      cvBase64: clientCvBase64,
-      portfolioBase64: clientPortfolioBase64,
-    } = body;
+    const formData = await request.formData();
+
+    const targetEmail = formData.get("targetEmail") as string;
+    const emailSubject = formData.get("emailSubject") as string;
+    const emailBody = formData.get("emailBody") as string;
+    const portfolioFile = formData.get("portfolio") as File | null;
 
     // Validate required fields
     if (!targetEmail || !emailSubject || !emailBody) {
@@ -36,33 +34,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get files from server cache first, fallback to request body
+    // Get CV from server cache (cached during /api/extract)
     const cached = getCachedFiles(session.user.id);
-    const cvBase64 = cached.cv?.base64 || clientCvBase64;
-    const portfolioBase64 = cached.portfolio?.base64 || clientPortfolioBase64;
+    const cvBase64 = cached.cv?.base64;
 
     if (!cvBase64) {
       return NextResponse.json(
-        { error: "CV tidak ditemukan. Silakan proses ulang screenshot terlebih dahulu." },
+        { error: "CV tidak ditemukan di cache. Silakan proses ulang screenshot terlebih dahulu." },
         { status: 400 }
       );
     }
 
-    // Prepare attachments from base64
+    // Prepare attachments
     const attachments = [];
 
-    if (cvBase64) {
-      attachments.push({
-        filename: "CV.pdf",
-        content: Buffer.from(cvBase64, "base64"),
-        mimeType: "application/pdf",
-      });
-    }
+    // CV from server cache (base64 → Buffer)
+    attachments.push({
+      filename: "CV.pdf",
+      content: Buffer.from(cvBase64, "base64"),
+      mimeType: "application/pdf",
+    });
 
-    if (portfolioBase64) {
+    // Portfolio from FormData binary file (if provided)
+    if (portfolioFile) {
+      const portfolioBytes = await portfolioFile.arrayBuffer();
       attachments.push({
         filename: "Portfolio.pdf",
-        content: Buffer.from(portfolioBase64, "base64"),
+        content: Buffer.from(portfolioBytes),
         mimeType: "application/pdf",
       });
     }
@@ -103,4 +101,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
 

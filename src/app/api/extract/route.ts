@@ -16,7 +16,6 @@ export async function POST(request: NextRequest) {
       imageBase64,
       mimeType,
       cvBase64,
-      portfolioBase64,
       geminiApiKey,
       groqApiKey,
     } = body;
@@ -28,9 +27,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Cache CV and Portfolio files server-side for later use by /api/send
-    if (session.user.id) {
-      cacheFiles(session.user.id, cvBase64, portfolioBase64);
+    // Cache CV server-side for later use by /api/send (portfolio NOT cached — sent directly at send time)
+    if (session.user.id && cvBase64) {
+      cacheFiles(session.user.id, cvBase64);
     }
 
     // Step 1: Extract job info from screenshot (with fallback)
@@ -42,9 +41,8 @@ export async function POST(request: NextRequest) {
     );
     const jobInfo = extractResult.data;
 
-    // Step 2: Prepare CV and Portfolio from frontend base64
+    // Step 2: Prepare CV for AI email generation (portfolio NOT sent here — attached at send time)
     let cvFile: FileAttachment | null = null;
-    let portfolioFile: FileAttachment | null = null;
 
     if (cvBase64) {
       cvFile = {
@@ -53,18 +51,12 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    if (portfolioBase64) {
-      portfolioFile = {
-        base64: portfolioBase64,
-        mimeType: "application/pdf",
-      };
-    }
-
-    // Step 3: Generate email content with CV & portfolio context (with fallback)
+    // Step 3: Generate email content with CV context (with fallback)
+    // Portfolio is NOT passed to AI — it will be attached as-is when sending email
     const emailResult = await generateEmailWithFallback(
       jobInfo,
       cvFile,
-      portfolioFile,
+      null, // portfolio not sent to AI
       geminiApiKey,
       groqApiKey
     );
@@ -101,3 +93,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

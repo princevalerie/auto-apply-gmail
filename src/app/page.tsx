@@ -76,9 +76,8 @@ export default function Home() {
 
     const extractedResults: ExtractionResult[] = [];
     
-    // Prepare CV and Portfolio base64 once
+    // Prepare CV base64 once (portfolio NOT sent to AI — not needed for extraction)
     const cvBase64 = cvFiles[0] ? await fileToBase64(cvFiles[0]) : undefined;
-    const portfolioBase64 = portfolioFiles[0] ? await fileToBase64(portfolioFiles[0]) : undefined;
 
     for (let i = 0; i < screenshots.length; i++) {
       try {
@@ -93,7 +92,6 @@ export default function Home() {
             imageBase64: base64, 
             mimeType,
             cvBase64,
-            portfolioBase64,
             ...getStoredApiKeys(),
           }),
         });
@@ -160,15 +158,22 @@ export default function Home() {
     }));
 
     try {
-      // Files are cached server-side during extraction, no need to send base64 again
+      // Send as FormData — portfolio as binary to avoid base64 bloat
+      // CV is already cached server-side from /api/extract step
+      // Only portfolio (~3.89MB binary) is sent here → well under Vercel's 4.5MB limit
+      const formData = new FormData();
+      formData.append("targetEmail", data.email);
+      formData.append("emailSubject", data.emailSubject);
+      formData.append("emailBody", data.emailBody);
+
+      // Attach Portfolio as binary file (no base64 conversion needed!)
+      if (portfolioFiles[0]) {
+        formData.append("portfolio", portfolioFiles[0]);
+      }
+
       const res = await fetch("/api/send", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          targetEmail: data.email,
-          emailSubject: data.emailSubject,
-          emailBody: data.emailBody,
-        }),
+        body: formData, // No Content-Type header — browser sets multipart/form-data boundary
       });
 
       if (!res.ok) {

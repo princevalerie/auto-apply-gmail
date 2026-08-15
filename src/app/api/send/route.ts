@@ -38,24 +38,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const userId = (session.user.id || session.user.email || "") as string;
+    const userEmail = (session.user.email || "") as string;
+
     // Ensure user exists in PostgreSQL (prevents foreign key errors)
     await upsertUser({
-      id: session.user.id,
+      id: userId,
       name: session.user.name,
-      email: session.user.email,
+      email: userEmail,
       image: session.user.image,
     }).catch(err => console.warn("[Send] upsertUser warning:", err));
 
     // Get CV: try memory cache first, then S3 storage
     let cvBuffer: Buffer | null = null;
 
-    const cached = getCachedFiles(session.user.id);
+    const cached = getCachedFiles(userId);
     if (cached.cv?.base64) {
       cvBuffer = Buffer.from(cached.cv.base64, "base64");
     } else {
       // Fallback: get CV from S3 via database record
       try {
-        const cvRecord = await getUserFile(session.user.id, "cv");
+        const cvRecord = await getUserFile(userId, "cv", userEmail);
         if (cvRecord?.file_url) {
           cvBuffer = await downloadFileFromS3Url(cvRecord.file_url);
           console.log("[Send] CV loaded from S3 storage");
@@ -94,7 +97,7 @@ export async function POST(request: NextRequest) {
       // Persist portfolio to Neon S3 Storage & PostgreSQL
       try {
         const s3Res = await uploadFileToS3({
-          userId: session.user.id,
+          userId: userId,
           fileType: "portfolio",
           fileName: portfolioFile.name || "Portfolio.pdf",
           fileBuffer: portfolioBuffer,
@@ -102,7 +105,8 @@ export async function POST(request: NextRequest) {
         });
 
         await saveFileRecord({
-          userId: session.user.id,
+          userId: userId,
+          userEmail: userEmail,
           fileType: "portfolio",
           fileName: portfolioFile.name || "Portfolio.pdf",
           fileUrl: s3Res.url,
@@ -116,7 +120,7 @@ export async function POST(request: NextRequest) {
     } else {
       // Fallback: get portfolio from S3 if user uploaded before
       try {
-        const portfolioRecord = await getUserFile(session.user.id, "portfolio");
+        const portfolioRecord = await getUserFile(userId, "portfolio", userEmail);
         if (portfolioRecord?.file_url) {
           const portfolioBuffer = await downloadFileFromS3Url(portfolioRecord.file_url);
           attachments.push({

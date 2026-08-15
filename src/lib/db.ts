@@ -96,6 +96,26 @@ export async function upsertUser(user: {
 }) {
   await initDatabase();
   const db = getSQL();
+
+  // If email exists, check if user exists with this email or id to prevent unique constraint conflict
+  if (user.email) {
+    const existing = await db`
+      SELECT id FROM users WHERE email = ${user.email} OR id = ${user.id} LIMIT 1
+    `;
+    if (existing && existing.length > 0) {
+      const targetId = existing[0].id;
+      await db`
+        UPDATE users
+        SET name = COALESCE(${user.name || null}, name),
+            email = COALESCE(${user.email || null}, email),
+            image = COALESCE(${user.image || null}, image),
+            updated_at = NOW()
+        WHERE id = ${targetId}
+      `;
+      return targetId;
+    }
+  }
+
   await db`
     INSERT INTO users (id, name, email, image, updated_at)
     VALUES (${user.id}, ${user.name || null}, ${user.email || null}, ${user.image || null}, NOW())
@@ -105,12 +125,14 @@ export async function upsertUser(user: {
       image = COALESCE(EXCLUDED.image, users.image),
       updated_at = NOW()
   `;
+  return user.id;
 }
 
 // ─── File Operations ─────────────────────────────────────────
 
 export async function saveFileRecord(params: {
   userId: string;
+  userEmail?: string;
   fileType: "cv" | "portfolio";
   fileName: string;
   fileUrl: string;
@@ -122,16 +144,27 @@ export async function saveFileRecord(params: {
 
   // Ensure user exists first to prevent foreign key violations
   await db`
-    INSERT INTO users (id, updated_at)
-    VALUES (${params.userId}, NOW())
-    ON CONFLICT (id) DO NOTHING
+    INSERT INTO users (id, email, updated_at)
+    VALUES (${params.userId}, ${params.userEmail || null}, NOW())
+    ON CONFLICT (id) DO UPDATE SET
+      email = COALESCE(EXCLUDED.email, users.email),
+      updated_at = NOW()
   `.catch(err => console.warn("[DB] Ensure user error:", err));
 
-  // Delete previous file of same type for this user (keep only latest)
-  await db`
-    DELETE FROM user_files 
-    WHERE user_id = ${params.userId} AND file_type = ${params.fileType}
-  `;
+  // Delete previous file of same type for this user (or by email)
+  if (params.userEmail) {
+    await db`
+      DELETE FROM user_files 
+      WHERE user_id = ${params.userId} 
+         OR user_id IN (SELECT id FROM users WHERE email = ${params.userEmail})
+         AND file_type = ${params.fileType}
+    `.catch(err => console.warn("[DB] Delete previous file warning:", err));
+  } else {
+    await db`
+      DELETE FROM user_files 
+      WHERE user_id = ${params.userId} AND file_type = ${params.fileType}
+    `.catch(err => console.warn("[DB] Delete previous file warning:", err));
+  }
 
   // Insert new file record
   const result = await db`
@@ -143,9 +176,23 @@ export async function saveFileRecord(params: {
   return result[0];
 }
 
-export async function getUserFile(userId: string, fileType: "cv" | "portfolio") {
+export async function getUserFile(userId: string, fileType: "cv" | "portfolio", userEmail?: string) {
   await initDatabase();
   const db = getSQL();
+
+  if (userEmail) {
+    const result = await db`
+      SELECT uf.id, uf.file_name, uf.file_url, uf.file_size, uf.mime_type, uf.created_at
+      FROM user_files uf
+      LEFT JOIN users u ON u.id = uf.user_id
+      WHERE (uf.user_id = ${userId} OR u.email = ${userEmail} OR uf.user_id = ${userEmail})
+        AND uf.file_type = ${fileType}
+      ORDER BY uf.created_at DESC
+      LIMIT 1
+    `;
+    return result[0] || null;
+  }
+
   const result = await db`
     SELECT id, file_name, file_url, file_size, mime_type, created_at
     FROM user_files
@@ -156,9 +203,21 @@ export async function getUserFile(userId: string, fileType: "cv" | "portfolio") 
   return result[0] || null;
 }
 
-export async function getUserFiles(userId: string) {
+export async function getUserFiles(userId: string, userEmail?: string) {
   await initDatabase();
   const db = getSQL();
+
+  if (userEmail) {
+    const result = await db`
+      SELECT uf.id, uf.file_type, uf.file_name, uf.file_url, uf.file_size, uf.mime_type, uf.created_at
+      FROM user_files uf
+      LEFT JOIN users u ON u.id = uf.user_id
+      WHERE uf.user_id = ${userId} OR u.email = ${userEmail} OR uf.user_id = ${userEmail}
+      ORDER BY uf.file_type, uf.created_at DESC
+    `;
+    return result;
+  }
+
   const result = await db`
     SELECT id, file_type, file_name, file_url, file_size, mime_type, created_at
     FROM user_files
@@ -168,8 +227,19 @@ export async function getUserFiles(userId: string) {
   return result;
 }
 
-export async function deleteUserFile(userId: string, fileType: "cv" | "portfolio") {
+export async function deleteUserFile(userId: string, fileType: "cv" | "portfolio", userEmail?: string) {
+  await initDatabase();
   const db = getSQL();
+
+  if (userEmail) {
+    await db`
+      DELETE FROM user_files 
+      WHERE (user_id = ${userId} OR user_id IN (SELECT id FROM users WHERE email = ${userEmail}) OR user_id = ${userEmail})
+        AND file_type = ${fileType}
+    `;
+    return;
+  }
+
   await db`
     DELETE FROM user_files 
     WHERE user_id = ${userId} AND file_type = ${fileType}

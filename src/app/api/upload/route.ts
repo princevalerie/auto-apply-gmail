@@ -49,17 +49,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
+    const userId = (session.user.id || session.user.email || "") as string;
+    const userEmail = (session.user.email || "") as string;
+
     // Ensure user exists in database
     await upsertUser({
-      id: session.user.id,
+      id: userId,
       name: session.user.name,
-      email: session.user.email,
+      email: userEmail,
       image: session.user.image,
     }).catch((err) => console.warn("[Upload] upsertUser warning:", err));
 
     // Upload to S3 storage
     const s3Result = await uploadFileToS3({
-      userId: session.user.id,
+      userId: userId,
       fileType: fileType as "cv" | "portfolio",
       fileName: file.name,
       fileBuffer: buffer,
@@ -68,7 +71,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Save file metadata to database
     await saveFileRecord({
-      userId: session.user.id,
+      userId: userId,
+      userEmail: userEmail,
       fileType: fileType as "cv" | "portfolio",
       fileName: file.name,
       fileUrl: s3Result.url,
@@ -76,7 +80,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       mimeType,
     });
 
-    console.log(`[Upload] Successfully uploaded and saved ${fileType} for user ${session.user.id}`);
+    console.log(`[Upload] Successfully uploaded and saved ${fileType} for user ${userId} (${userEmail})`);
 
     return NextResponse.json({
       success: true,

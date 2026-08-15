@@ -29,26 +29,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const userId = (session.user.id || session.user.email || "") as string;
+    const userEmail = (session.user.email || "") as string;
+
     // Ensure user exists in database
-    if (session.user.id) {
-      await upsertUser({
-        id: session.user.id,
-        name: session.user.name,
-        email: session.user.email,
-        image: session.user.image,
-      }).catch(err => console.warn("[Extract] upsertUser warning:", err));
-    }
+    await upsertUser({
+      id: userId,
+      name: session.user.name,
+      email: userEmail,
+      image: session.user.image,
+    }).catch(err => console.warn("[Extract] upsertUser warning:", err));
 
     let effectiveCvBase64 = cvBase64;
 
     // If new CV was uploaded, persist it to S3 & Database
-    if (session.user.id && cvBase64) {
-      cacheFiles(session.user.id, cvBase64);
+    if (userId && cvBase64) {
+      cacheFiles(userId, cvBase64);
 
       try {
         const cvBuffer = Buffer.from(cvBase64, "base64");
         const s3Res = await uploadFileToS3({
-          userId: session.user.id,
+          userId: userId,
           fileType: "cv",
           fileName: "CV.pdf",
           fileBuffer: cvBuffer,
@@ -56,7 +57,8 @@ export async function POST(request: NextRequest) {
         });
 
         await saveFileRecord({
-          userId: session.user.id,
+          userId: userId,
+          userEmail: userEmail,
           fileType: "cv",
           fileName: "CV.pdf",
           fileUrl: s3Res.url,
@@ -67,14 +69,14 @@ export async function POST(request: NextRequest) {
       } catch (saveErr) {
         console.warn("[Extract] Could not persist CV to S3/DB:", (saveErr as Error).message);
       }
-    } else if (!effectiveCvBase64 && session.user.id) {
+    } else if (!effectiveCvBase64 && userId) {
       // If no CV uploaded in this session, auto-load saved CV from S3/Database
       try {
-        const savedCv = await getUserFile(session.user.id, "cv");
+        const savedCv = await getUserFile(userId, "cv", userEmail);
         if (savedCv?.file_url) {
           const cvBuffer = await downloadFileFromS3Url(savedCv.file_url);
           effectiveCvBase64 = cvBuffer.toString("base64");
-          cacheFiles(session.user.id, effectiveCvBase64);
+          cacheFiles(userId, effectiveCvBase64);
           console.log("[Extract] Auto-loaded saved CV from Cloud for AI analysis");
         }
       } catch (loadErr) {

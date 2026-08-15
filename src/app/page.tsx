@@ -74,10 +74,10 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (session?.user?.id) {
+    if (status === "authenticated") {
       fetchSavedFiles();
     }
-  }, [session?.user?.id, fetchSavedFiles]);
+  }, [status, fetchSavedFiles]);
 
   const isCheckingCloudFiles = isLoadingSavedFiles || status === "loading";
 

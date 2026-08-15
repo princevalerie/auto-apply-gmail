@@ -5,12 +5,15 @@ import { deleteFileFromS3Url } from "@/lib/s3";
 
 export async function GET() {
   const session = await auth();
-  if (!session?.user?.id) {
+  if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const userId = (session.user.id || session.user.email || "") as string;
+  const userEmail = (session.user.email || "") as string;
+
   try {
-    const files = await getUserFiles(session.user.id);
+    const files = await getUserFiles(userId, userEmail);
     
     let cv = null;
     let portfolio = null;
@@ -52,7 +55,7 @@ export async function GET() {
 
 export async function DELETE(request: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id) {
+  if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -64,7 +67,10 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Invalid file type" }, { status: 400 });
     }
 
-    const existingFile = await getUserFile(session.user.id, fileType);
+    const userId = (session.user.id || session.user.email || "") as string;
+    const userEmail = (session.user.email || "") as string;
+
+    const existingFile = await getUserFile(userId, fileType, userEmail);
     if (existingFile) {
       // Delete from S3 if possible
       try {
@@ -74,8 +80,8 @@ export async function DELETE(request: NextRequest) {
       }
 
       // Delete from PostgreSQL
-      await deleteUserFile(session.user.id, fileType);
-      console.log(`[UserFiles] Deleted ${fileType} for user ${session.user.id}`);
+      await deleteUserFile(userId, fileType, userEmail);
+      console.log(`[UserFiles] Deleted ${fileType} for user ${userId} (${userEmail})`);
     }
 
     return NextResponse.json({ success: true });

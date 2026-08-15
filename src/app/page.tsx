@@ -165,6 +165,8 @@ export default function Home() {
       formData.append("targetEmail", data.email);
       formData.append("emailSubject", data.emailSubject);
       formData.append("emailBody", data.emailBody);
+      formData.append("position", data.position);
+      formData.append("company", data.company);
 
       // Attach Portfolio as binary file (no base64 conversion needed!)
       if (portfolioFiles[0]) {

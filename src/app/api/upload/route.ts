@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
+import { uploadFileToS3 } from "@/lib/s3";
+import { saveFileRecord, upsertUser } from "@/lib/db";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const session = await auth();
@@ -12,6 +12,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
+    const fileType = (formData.get("fileType") as string) || "cv"; // 'cv' or 'portfolio'
 
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
@@ -38,23 +39,39 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // Save path: public/uploads/
-    const uploadDir = path.join(process.cwd(), "public", "uploads");
-    await mkdir(uploadDir, { recursive: true });
+    // Ensure user exists in database
+    await upsertUser({
+      id: session.user.id,
+      name: session.user.name,
+      email: session.user.email,
+      image: session.user.image,
+    });
 
-    // Generate clean filename
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const fileExtension = path.extname(file.name);
-    const baseName = path.basename(file.name, fileExtension).replace(/[^a-zA-Z0-9]/g, "_");
-    const filename = `${baseName}-${uniqueSuffix}${fileExtension}`;
-    const filePath = path.join(uploadDir, filename);
+    // Upload to S3 storage
+    const s3Result = await uploadFileToS3({
+      userId: session.user.id,
+      fileType: fileType as "cv" | "portfolio",
+      fileName: file.name,
+      fileBuffer: buffer,
+      mimeType: file.type,
+    });
 
-    await writeFile(filePath, buffer);
+    // Save file metadata to database
+    await saveFileRecord({
+      userId: session.user.id,
+      fileType: fileType as "cv" | "portfolio",
+      fileName: file.name,
+      fileUrl: s3Result.url,
+      fileSize: file.size,
+      mimeType: file.type,
+    });
 
-    const fileUrl = `/uploads/${filename}`;
-
-    return NextResponse.json({ url: fileUrl });
+    return NextResponse.json({
+      url: s3Result.url,
+      key: s3Result.key,
+    });
   } catch (error) {
+    console.error("Upload error:", error);
     return NextResponse.json(
       { error: (error as Error).message },
       { status: 500 }

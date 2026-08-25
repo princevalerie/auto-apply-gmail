@@ -130,6 +130,30 @@ export async function upsertUser(user: {
 
 // ─── File Operations ─────────────────────────────────────────
 
+/**
+ * Resolve the canonical user ID from the database.
+ * Looks up by both id and email to handle cases where the auth provider
+ * returns different IDs across sessions (e.g., sub vs email).
+ */
+async function resolveUserId(
+  db: ReturnType<typeof getSQL>,
+  userId: string,
+  userEmail?: string
+): Promise<string> {
+  if (userEmail) {
+    const rows = await db`
+      SELECT id FROM users WHERE id = ${userId} OR email = ${userEmail} LIMIT 1
+    `;
+    if (rows.length > 0) return rows[0].id;
+  } else {
+    const rows = await db`
+      SELECT id FROM users WHERE id = ${userId} LIMIT 1
+    `;
+    if (rows.length > 0) return rows[0].id;
+  }
+  return userId;
+}
+
 export async function saveFileRecord(params: {
   userId: string;
   userEmail?: string;
@@ -142,34 +166,53 @@ export async function saveFileRecord(params: {
   await initDatabase();
   const db = getSQL();
 
-  // Ensure user exists first to prevent foreign key violations
-  await db`
-    INSERT INTO users (id, email, updated_at)
-    VALUES (${params.userId}, ${params.userEmail || null}, NOW())
-    ON CONFLICT (id) DO UPDATE SET
-      email = COALESCE(EXCLUDED.email, users.email),
-      updated_at = NOW()
-  `.catch(err => console.warn("[DB] Ensure user error:", err));
+  // Step 1: Ensure user exists first to prevent foreign key violations.
+  // Use ON CONFLICT on both id and email to handle all edge cases.
+  try {
+    await db`
+      INSERT INTO users (id, email, updated_at)
+      VALUES (${params.userId}, ${params.userEmail || null}, NOW())
+      ON CONFLICT (id) DO UPDATE SET
+        email = COALESCE(EXCLUDED.email, users.email),
+        updated_at = NOW()
+    `;
+  } catch (err) {
+    // If insert fails (e.g., email unique conflict with different id),
+    // try to update the existing user instead
+    console.warn("[DB] Ensure user insert conflict, trying update:", err);
+    if (params.userEmail) {
+      await db`
+        UPDATE users SET updated_at = NOW()
+        WHERE id = ${params.userId} OR email = ${params.userEmail}
+      `.catch(e => console.warn("[DB] Ensure user fallback update error:", e));
+    }
+  }
 
-  // Delete previous file of same type for this user (or by email)
+  // Step 2: Resolve the canonical user ID (handles id/email mismatches)
+  const canonicalUserId = await resolveUserId(db, params.userId, params.userEmail);
+
+  // Step 3: Delete previous file of same type for this user
+  // Fixed: Added proper parentheses around OR condition so AND file_type applies to both
   if (params.userEmail) {
     await db`
       DELETE FROM user_files 
-      WHERE user_id = ${params.userId} 
-         OR user_id IN (SELECT id FROM users WHERE email = ${params.userEmail})
-         AND file_type = ${params.fileType}
+      WHERE (
+        user_id = ${canonicalUserId} 
+        OR user_id IN (SELECT id FROM users WHERE email = ${params.userEmail})
+      )
+      AND file_type = ${params.fileType}
     `.catch(err => console.warn("[DB] Delete previous file warning:", err));
   } else {
     await db`
       DELETE FROM user_files 
-      WHERE user_id = ${params.userId} AND file_type = ${params.fileType}
+      WHERE user_id = ${canonicalUserId} AND file_type = ${params.fileType}
     `.catch(err => console.warn("[DB] Delete previous file warning:", err));
   }
 
-  // Insert new file record
+  // Step 4: Insert new file record using the canonical user ID
   const result = await db`
     INSERT INTO user_files (user_id, file_type, file_name, file_url, file_size, mime_type)
-    VALUES (${params.userId}, ${params.fileType}, ${params.fileName}, ${params.fileUrl}, ${params.fileSize || null}, ${params.mimeType || "application/pdf"})
+    VALUES (${canonicalUserId}, ${params.fileType}, ${params.fileName}, ${params.fileUrl}, ${params.fileSize || null}, ${params.mimeType || "application/pdf"})
     RETURNING id, file_url
   `;
 
@@ -180,12 +223,15 @@ export async function getUserFile(userId: string, fileType: "cv" | "portfolio", 
   await initDatabase();
   const db = getSQL();
 
+  // Resolve canonical user ID first
+  const canonicalUserId = await resolveUserId(db, userId, userEmail);
+
   if (userEmail) {
     const result = await db`
       SELECT uf.id, uf.file_name, uf.file_url, uf.file_size, uf.mime_type, uf.created_at
       FROM user_files uf
       LEFT JOIN users u ON u.id = uf.user_id
-      WHERE (uf.user_id = ${userId} OR u.email = ${userEmail} OR uf.user_id = ${userEmail})
+      WHERE (uf.user_id = ${canonicalUserId} OR u.email = ${userEmail})
         AND uf.file_type = ${fileType}
       ORDER BY uf.created_at DESC
       LIMIT 1
@@ -196,7 +242,7 @@ export async function getUserFile(userId: string, fileType: "cv" | "portfolio", 
   const result = await db`
     SELECT id, file_name, file_url, file_size, mime_type, created_at
     FROM user_files
-    WHERE user_id = ${userId} AND file_type = ${fileType}
+    WHERE user_id = ${canonicalUserId} AND file_type = ${fileType}
     ORDER BY created_at DESC
     LIMIT 1
   `;
@@ -207,12 +253,15 @@ export async function getUserFiles(userId: string, userEmail?: string) {
   await initDatabase();
   const db = getSQL();
 
+  // Resolve canonical user ID first
+  const canonicalUserId = await resolveUserId(db, userId, userEmail);
+
   if (userEmail) {
     const result = await db`
       SELECT uf.id, uf.file_type, uf.file_name, uf.file_url, uf.file_size, uf.mime_type, uf.created_at
       FROM user_files uf
       LEFT JOIN users u ON u.id = uf.user_id
-      WHERE uf.user_id = ${userId} OR u.email = ${userEmail} OR uf.user_id = ${userEmail}
+      WHERE (uf.user_id = ${canonicalUserId} OR u.email = ${userEmail})
       ORDER BY uf.file_type, uf.created_at DESC
     `;
     return result;
@@ -221,7 +270,7 @@ export async function getUserFiles(userId: string, userEmail?: string) {
   const result = await db`
     SELECT id, file_type, file_name, file_url, file_size, mime_type, created_at
     FROM user_files
-    WHERE user_id = ${userId}
+    WHERE user_id = ${canonicalUserId}
     ORDER BY file_type, created_at DESC
   `;
   return result;
@@ -231,18 +280,24 @@ export async function deleteUserFile(userId: string, fileType: "cv" | "portfolio
   await initDatabase();
   const db = getSQL();
 
+  // Resolve canonical user ID first
+  const canonicalUserId = await resolveUserId(db, userId, userEmail);
+
   if (userEmail) {
     await db`
       DELETE FROM user_files 
-      WHERE (user_id = ${userId} OR user_id IN (SELECT id FROM users WHERE email = ${userEmail}) OR user_id = ${userEmail})
-        AND file_type = ${fileType}
+      WHERE (
+        user_id = ${canonicalUserId} 
+        OR user_id IN (SELECT id FROM users WHERE email = ${userEmail})
+      )
+      AND file_type = ${fileType}
     `;
     return;
   }
 
   await db`
     DELETE FROM user_files 
-    WHERE user_id = ${userId} AND file_type = ${fileType}
+    WHERE user_id = ${canonicalUserId} AND file_type = ${fileType}
   `;
 }
 

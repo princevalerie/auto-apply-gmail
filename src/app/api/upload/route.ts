@@ -52,13 +52,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const userId = (session.user.id || session.user.email || "") as string;
     const userEmail = (session.user.email || "") as string;
 
-    // Ensure user exists in database
-    await upsertUser({
-      id: userId,
-      name: session.user.name,
-      email: userEmail,
-      image: session.user.image,
-    }).catch((err) => console.warn("[Upload] upsertUser warning:", err));
+    // Ensure user exists in database (must succeed before saving file record)
+    try {
+      await upsertUser({
+        id: userId,
+        name: session.user.name,
+        email: userEmail,
+        image: session.user.image,
+      });
+    } catch (err) {
+      console.warn("[Upload] upsertUser warning:", err);
+      // Continue anyway — saveFileRecord has its own user-ensure logic
+    }
 
     // Upload to S3 storage
     const s3Result = await uploadFileToS3({

@@ -42,7 +42,7 @@ async function fetchGeminiModels(apiKey: string): Promise<string[]> {
   try {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
-      { signal: AbortSignal.timeout(5000) }
+      { signal: AbortSignal.timeout(1500) }
     );
     if (!res.ok) {
       console.warn(`[Model Discovery] Gemini list models failed: ${res.status}`);
@@ -72,7 +72,7 @@ async function fetchGroqModels(apiKey: string): Promise<string[]> {
   try {
     const res = await fetch("https://api.groq.com/openai/v1/models", {
       headers: { Authorization: `Bearer ${apiKey}` },
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(2500),
     });
     if (!res.ok) {
       console.warn(`[Model Discovery] Groq list models failed: ${res.status}`);

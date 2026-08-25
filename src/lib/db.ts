@@ -94,7 +94,6 @@ export async function upsertUser(user: {
   email?: string | null;
   image?: string | null;
 }) {
-  await initDatabase();
   const db = getSQL();
 
   // If email exists, check if user exists with this email or id to prevent unique constraint conflict
@@ -163,7 +162,6 @@ export async function saveFileRecord(params: {
   fileSize?: number;
   mimeType?: string;
 }) {
-  await initDatabase();
   const db = getSQL();
 
   // Step 1: Ensure user exists first to prevent foreign key violations.
@@ -220,7 +218,6 @@ export async function saveFileRecord(params: {
 }
 
 export async function getUserFile(userId: string, fileType: "cv" | "portfolio", userEmail?: string) {
-  await initDatabase();
   const db = getSQL();
 
   // Resolve canonical user ID first
@@ -250,7 +247,6 @@ export async function getUserFile(userId: string, fileType: "cv" | "portfolio", 
 }
 
 export async function getUserFiles(userId: string, userEmail?: string) {
-  await initDatabase();
   const db = getSQL();
 
   // Resolve canonical user ID first
@@ -277,7 +273,6 @@ export async function getUserFiles(userId: string, userEmail?: string) {
 }
 
 export async function deleteUserFile(userId: string, fileType: "cv" | "portfolio", userEmail?: string) {
-  await initDatabase();
   const db = getSQL();
 
   // Resolve canonical user ID first

@@ -310,7 +310,8 @@ export async function extractAndGenerateGemini(
   mimeType: string,
   cvFile?: FileAttachment | null,
   portfolioFile?: FileAttachment | null,
-  apiKey?: string
+  apiKey?: string,
+  language: "id" | "en" = "id"
 ): Promise<ExtractedJobAndEmail> {
   const genAI = getGenAI(apiKey);
 
@@ -348,7 +349,7 @@ export async function extractAndGenerateGemini(
       },
       emailBody: {
         type: SchemaType.STRING,
-        description: "Isi/body email lamaran kerja lengkap dalam Bahasa Indonesia formal dan sopan (tanpa placeholder)",
+        description: "Isi/body email lamaran kerja yang sudah terisi lengkap dan dipisahkan dengan newline ganda (\\n\\n) agar rapi",
       },
     },
     required: [
@@ -362,16 +363,6 @@ export async function extractAndGenerateGemini(
       "emailBody",
     ],
   };
-
-  // Determine time of day for greeting (WIB)
-  const currentHour = parseInt(
-    new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta", hour: "numeric", hour12: false }),
-    10
-  );
-  let timeGreeting = "pagi";
-  if (currentHour >= 11 && currentHour < 15) timeGreeting = "siang";
-  else if (currentHour >= 15 && currentHour < 18) timeGreeting = "sore";
-  else if (currentHour >= 18 || currentHour < 3) timeGreeting = "malam";
 
   // Build content parts
   const parts: Array<{ text: string } | { inlineData: { data: string; mimeType: string } }> = [
@@ -401,29 +392,80 @@ export async function extractAndGenerateGemini(
     });
   }
 
-  parts.push({
-    text: `Tugasmu:
+  const promptText = language === "en"
+    ? `Task:
+1. Analyze the job vacancy screenshot (first image) and extract:
+   - position: job title
+   - company: company name
+   - email: recruiter/HR target email (empty string if not found)
+   - requirements: array of key requirements
+   - location: work location (empty string if not found)
+   - subjectInstruction: subject format instructions from screenshot if any
+
+2. Write a HIGH-QUALITY, CONFIDENT, AND ELEGANT job application email in standard professional business English:
+   - MATCHMAKING LOGIC: Carefully cross-reference the job requirements from the screenshot (e.g. tools, skills, tasks) with the applicant's actual experiences and projects in the attached CV. Specifically highlight 1-2 concrete qualifications that demonstrate why the applicant is a great fit for this exact role.
+   - TONE & STYLE: Calm, confident, polite, and articulate.
+   - FORBIDDEN PHRASES: NEVER use desperate or cliché wording like "available anytime", "greatly looking forward", "I really hope", "pleading for opportunity", etc.
+   - APPLICANT MAJOR: "Informatics Engineering" or "Computer Science" (DO NOT write Electronics).
+   - APPLICANT PROFILE: Final-year student who has completed all coursework with no on-campus classes remaining (full-time availability).
+   - Real contact data: Extract applicant's full name, WhatsApp/phone number, and email from the attached CV.
+   - NO PLACEHOLDERS ([NAME], [Company], etc). Everything must be populated with real data.
+
+MANDATORY EMAIL BODY STRUCTURE (Every block MUST be separated by a double line break \\n\\n):
+
+Dear Hiring Team at [Company Name],
+
+Good day,
+
+My name is [Full Name from CV], a final-year Informatics Engineering student who has completed all coursework with no remaining on-campus classes, giving me full-time availability. I am writing to apply for the [Position] position at [Company].
+
+[1-2 crisp, professional sentences connecting the applicant's specific skills/experiences from the CV directly to the requirements listed in the vacancy, such as data analysis, SQL, Power BI, Python, Excel, etc.].
+
+Attached is my resume ${portfolioFile ? "and portfolio " : ""}for your review. Thank you for your time and consideration.
+
+Sincerely,
+[Full Name from CV]
+WhatsApp: [WhatsApp/Phone number from CV]
+[Email from CV]`
+    : `Tugasmu:
 1. Analisis screenshot lowongan kerja (gambar pertama) dan ekstrak:
-   - position: nama posisi
-   - company: nama perusahaan
-   - email: alamat email HR/recruiter (kosongkan string jika tidak ada)
-   - requirements: array requirement utama
+   - position: nama posisi/role yang dilamar
+   - company: nama perusahaan yang membuka lowongan
+   - email: alamat email HR/recruiter tujuan (kosongkan string jika tidak ada)
+   - requirements: array requirement/kualifikasi utama
    - location: lokasi kerja (kosongkan jika tidak ada)
    - subjectInstruction: arahan format subject jika tertulis di screenshot
 
-2. Sekaligus buatkan email lamaran kerja profesional dalam Bahasa Indonesia formal:
-   ${cvFile ? "- Ambil nama lengkap pelamar dari CV (file terlampir) dan sesuaikan skill/pengalaman relevan." : "- Gunakan data pelamar umum."}
-   - Subject: Ikuti arahan subjectInstruction jika ada, atau buat subject profesional mencantumkan posisi & nama asli pelamar dari CV.
-   
-   STATUS & PROFIL PELAMAR (WAJIB DISEBUTKAN):
-   - Pelamar adalah mahasiswa tingkat akhir yang SUDAH TIDAK ADA KELAS / tidak menghadiri perkuliahan tatap muka lagi (bebas teori / hanya tinggal tugas akhir), sehingga memiliki ketersediaan waktu penuh (full availability).
-   
-   ATURAN KETAT:
-   - DILARANG menggunakan placeholder seperti [NAMA_ANDA], [Nama Anda], dll.
-   - Tone sopan, profesional, tenang, percaya diri. Hindari kata klise berlebihan ("sangat tertarik", "besar harapan", dll).
-   - Format struktur: Sapaan -> Salam -> Paragraf 1 (Perkenalan & status mahasiswa no class / full availability) -> Paragraf 2 (Kualifikasi singkat 1-2 kalimat) -> Paragraf 3 (Lampiran CV & terima kasih) -> Tanda tangan & kontak rapi.
-   - Total body email 6-8 kalimat ringkas.`,
-  });
+2. Buatkan email lamaran kerja yang SANGAT BERBOBOT, SOPAN, PERCAYA DIRI, dan RAPI dalam Bahasa Indonesia formal:
+   - PENCOCOKAN KUALIFIKASI (SANGAT PENTING): Cocokkan requirement dari screenshot (misal: Excel, SQL, analisis data, reporting, visualisasi data, dll) dengan pengalaman, proyek, dan keahlian yang ada di CV pelamar. Jelaskan secara FAKTUAL dan relevan dalam 1-2 kalimat mengapa kualifikasi pelamar tepat untuk posisi ini.
+   - PANDUAN TONE: Tenang, beretika, profesional, dan meyakinkan.
+   - DILARANG KERAS menggunakan kata-kata desperate / murahan / klise seperti:
+     * "siap dihubungi kapan saja" / "kapan pun"
+     * "sangat tertarik" / "sangat berminat" / "sangat berharap"
+     * "besar harapan saya" / "mohon diberi kesempatan"
+   - JURUSAN PELAMAR: "Teknik Informatika" (DILARANG KERAS menulis "Informatika Elektronika" atau kata "Elektronika").
+   - PROFIL PELAMAR: Mahasiswa tingkat akhir Teknik Informatika yang telah menyelesaikan seluruh mata kuliah perkuliahan tanpa kelas tatap muka aktif (bebas teori), sehingga memiliki ketersediaan waktu penuh (full-time availability) untuk bekerja.
+   - Ambil nama lengkap asli pelamar, nomor WhatsApp/HP, dan email langsung dari file CV terlampir.
+   - DILARANG MENGGUNAKAN PLACEHOLDER apapun ([NAMA], [Perusahaan], dll).
+
+STRUKTUR WAJIB ISI EMAIL (Setiap bagian WAJIB dipisahkan dengan double line break \\n\\n):
+
+Kepada Tim Rekrutmen [Nama Perusahaan],
+
+Selamat pagi/siang Bapak/Ibu,
+
+Perkenalkan, saya [Nama Lengkap Asli Pelamar dari CV], mahasiswa tingkat akhir Teknik Informatika yang telah menyelesaikan seluruh mata kuliah perkuliahan tanpa ada kelas tatap muka aktif, sehingga memiliki ketersediaan waktu penuh untuk bekerja secara optimal. Melalui email ini, saya bermaksud mengajukan lamaran untuk posisi [Posisi] di [Perusahaan].
+
+[1-2 kalimat fakta relevan yang mencocokkan keahlian dan pengalaman pelamar dari CV dengan kebutuhan posisi di screenshot, misalnya pengolahan data menggunakan SQL, Looker Studio, Power BI, Python, Excel, dsb].
+
+Sebagai bahan pertimbangan, bersama email ini saya lampirkan CV ${portfolioFile ? "dan portofolio " : ""}saya yang memuat rincian pengalaman serta proyek yang pernah saya kerjakan. Terima kasih atas waktu dan perhatian Bapak/Ibu.
+
+Hormat saya,
+[Nama Lengkap Asli Pelamar dari CV]
+WhatsApp: [Nomor WhatsApp/HP dari CV, contoh: +62 8xx-xxxx-xxxx]
+[Email Pelamar dari CV]`;
+
+  parts.push({ text: promptText });
 
   let lastError: Error | null = null;
   const discovered = await discoverModels(apiKey);
@@ -431,7 +473,7 @@ export async function extractAndGenerateGemini(
 
   for (const modelName of modelsToTry) {
     try {
-      console.log(`[Gemini] Trying single-call model: ${modelName}`);
+      console.log(`[Gemini] Trying single-call model (${language}): ${modelName}`);
       const model = genAI.getGenerativeModel({ model: modelName });
 
       const result = await model.generateContent({

@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
       cvBase64,
       geminiApiKey,
       groqApiKey,
+      language = "id",
     } = body;
 
     if (!imageBase64 || !mimeType) {
@@ -112,7 +113,8 @@ export async function POST(request: NextRequest) {
       cvFile,
       null, // portfolio is attached at send time
       geminiApiKey,
-      groqApiKey
+      groqApiKey,
+      language
     );
 
     const resultData = aiResult.data;

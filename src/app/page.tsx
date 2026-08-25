@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
-import { ArrowRight, Loader2, Sparkles, Send, CheckCircle2, FileText, Cpu, Cloud, AlertTriangle, RefreshCw, Settings, Zap } from "lucide-react";
+import { ArrowRight, Loader2, Sparkles, Send, CheckCircle2, FileText, Cpu, Cloud, AlertTriangle, RefreshCw, Settings, Zap, Languages } from "lucide-react";
 import { FileUploadZone, type SavedFileInfo } from "@/components/file-upload-zone";
 import { ApplicationCard } from "@/components/application-card";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { SettingsPanel, getStoredApiKeys } from "@/components/settings-panel";
 import { toast } from "sonner";
-import { getMimeType, isValidEmail } from "@/lib/utils";
+import { cn, getMimeType, isValidEmail } from "@/lib/utils";
 
 interface AIHealthStatus {
   gemini: { ok: boolean; models: number };
@@ -42,6 +42,7 @@ export default function Home() {
   const [screenshots, setScreenshots] = useState<File[]>([]);
   const [cvFiles, setCvFiles] = useState<File[]>([]);
   const [portfolioFiles, setPortfolioFiles] = useState<File[]>([]);
+  const [emailLanguage, setEmailLanguage] = useState<"id" | "en">("id");
 
   // AI Health Check
   const [aiStatus, setAiStatus] = useState<"loading" | "ok" | "failed">("loading");
@@ -260,6 +261,7 @@ export default function Home() {
             imageBase64: base64, 
             mimeType,
             cvBase64,
+            language: emailLanguage,
             ...getStoredApiKeys(),
           }),
         });
@@ -611,14 +613,48 @@ export default function Home() {
               />
             </div>
 
+            {/* Language Selector Mode */}
+            <div className="flex items-center justify-between p-3 rounded-xl bg-secondary/40 border border-border mt-4">
+              <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <Languages className="w-3.5 h-3.5 text-primary" />
+                Bahasa Email:
+              </span>
+              <div className="flex items-center gap-1 p-0.5 rounded-lg bg-background border border-border text-xs">
+                <button
+                  type="button"
+                  onClick={() => setEmailLanguage("id")}
+                  className={cn(
+                    "px-2.5 py-1 rounded-md font-medium transition-all",
+                    emailLanguage === "id"
+                      ? "bg-primary text-white shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  🇮🇩 Indonesia
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEmailLanguage("en")}
+                  className={cn(
+                    "px-2.5 py-1 rounded-md font-medium transition-all",
+                    emailLanguage === "en"
+                      ? "bg-primary text-white shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  🇬🇧 English
+                </button>
+              </div>
+            </div>
+
             {/* Extract button */}
             {screenshots.length > 0 && (cvFiles.length > 0 || savedCv) && !isExtracting && (
               <button
                 onClick={handleExtract}
-                className="btn-primary w-full mt-6 py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 group"
+                className="btn-primary w-full mt-4 py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 group"
               >
                 <Sparkles className="w-4 h-4" />
-                Proses {screenshots.length} Screenshot
+                Proses {screenshots.length} Screenshot ({emailLanguage === "id" ? "Bahasa Indonesia" : "English"})
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </button>
             )}

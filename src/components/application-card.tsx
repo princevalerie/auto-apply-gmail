@@ -201,7 +201,7 @@ export function ApplicationCard({
         <textarea
           value={data.emailBody}
           onChange={(e) => onBodyChange(e.target.value)}
-          rows={8}
+          rows={12}
           className="w-full px-4 py-3 rounded-xl bg-input border border-border text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
           disabled={sent || sending}
         />

@@ -30,7 +30,8 @@ export async function extractAndGenerateWithFallback(
   cvFile?: FileAttachment | null,
   portfolioFile?: FileAttachment | null,
   geminiApiKey?: string,
-  groqApiKey?: string
+  groqApiKey?: string,
+  language: "id" | "en" = "id"
 ): Promise<AIResult<ExtractedJobAndEmail>> {
   const effectiveGroqKey = groqApiKey || process.env.GROQ_API_KEY;
 
@@ -41,7 +42,8 @@ export async function extractAndGenerateWithFallback(
       mimeType,
       cvFile,
       portfolioFile,
-      geminiApiKey
+      geminiApiKey,
+      language
     );
     return { data, provider: "gemini" };
   } catch (error) {
@@ -59,7 +61,8 @@ export async function extractAndGenerateWithFallback(
           imageBase64,
           mimeType,
           cvFile,
-          portfolioFile
+          portfolioFile,
+          language
         );
         return { data, provider: "groq" };
       } catch (groqError) {

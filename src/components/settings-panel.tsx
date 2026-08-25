@@ -1,11 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Eye, EyeOff, Key, Save, CheckCircle2, AlertTriangle, Sparkles, Cpu } from "lucide-react";
+import { X, Eye, EyeOff, Key, Save, CheckCircle2, AlertTriangle, Sparkles, Cpu, Loader2, Wifi } from "lucide-react";
 
 interface SettingsPanelProps {
   open: boolean;
   onClose: () => void;
+  onKeysUpdated?: () => void;
+}
+
+interface TestResult {
+  gemini: { ok: boolean; models: number };
+  groq: { ok: boolean; models: number };
+  anyOk: boolean;
 }
 
 const STORAGE_KEY_GEMINI = "autoapply_gemini_key";
@@ -19,12 +26,14 @@ export function getStoredApiKeys() {
   };
 }
 
-export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
+export function SettingsPanel({ open, onClose, onKeysUpdated }: SettingsPanelProps) {
   const [geminiKey, setGeminiKey] = useState("");
   const [groqKey, setGroqKey] = useState("");
   const [showGemini, setShowGemini] = useState(false);
   const [showGroq, setShowGroq] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<TestResult | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -32,6 +41,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       setGeminiKey(keys.geminiApiKey);
       setGroqKey(keys.groqApiKey);
       setSaved(false);
+      setTestResult(null);
     }
   }, [open]);
 
@@ -48,6 +58,31 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     }
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
+    // Notify parent to re-check AI health
+    onKeysUpdated?.();
+  };
+
+  const handleTestConnection = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      // Use current input values (not yet saved) for testing
+      const params = new URLSearchParams();
+      if (geminiKey.trim()) params.set("geminiApiKey", geminiKey.trim());
+      if (groqKey.trim()) params.set("groqApiKey", groqKey.trim());
+
+      const res = await fetch(`/api/ai/health?${params.toString()}`);
+      if (res.ok) {
+        const data: TestResult = await res.json();
+        setTestResult(data);
+      } else {
+        setTestResult({ gemini: { ok: false, models: 0 }, groq: { ok: false, models: 0 }, anyOk: false });
+      }
+    } catch {
+      setTestResult({ gemini: { ok: false, models: 0 }, groq: { ok: false, models: 0 }, anyOk: false });
+    } finally {
+      setTesting(false);
+    }
   };
 
   const maskKey = (key: string) => {
@@ -229,6 +264,64 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                   Groq
                 </span>
               </div>
+            </div>
+
+            {/* Test Connection */}
+            <div className="pt-2">
+              <button
+                onClick={handleTestConnection}
+                disabled={testing}
+                className="w-full py-2.5 rounded-xl text-sm font-medium border border-border hover:bg-secondary transition-colors flex items-center justify-center gap-2 text-muted-foreground hover:text-foreground disabled:opacity-50"
+              >
+                {testing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Mengecek koneksi...
+                  </>
+                ) : (
+                  <>
+                    <Wifi className="w-4 h-4" />
+                    Test Koneksi
+                  </>
+                )}
+              </button>
+
+              {/* Test Results */}
+              {testResult && (
+                <div className="mt-3 space-y-1.5 animate-fade-in">
+                  <div className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs ${
+                    testResult.gemini.ok
+                      ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
+                      : "bg-destructive/10 border border-destructive/20 text-destructive"
+                  }`}>
+                    <span className="flex items-center gap-1.5">
+                      <Sparkles className="w-3 h-3" />
+                      Gemini
+                    </span>
+                    <span className="font-semibold">
+                      {testResult.gemini.ok ? `✓ ${testResult.gemini.models} models` : "✕ Gagal"}
+                    </span>
+                  </div>
+                  <div className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs ${
+                    testResult.groq.ok
+                      ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
+                      : "bg-destructive/10 border border-destructive/20 text-destructive"
+                  }`}>
+                    <span className="flex items-center gap-1.5">
+                      <Cpu className="w-3 h-3" />
+                      Groq
+                    </span>
+                    <span className="font-semibold">
+                      {testResult.groq.ok ? `✓ ${testResult.groq.models} models` : "✕ Gagal"}
+                    </span>
+                  </div>
+                  <p className={`text-[11px] text-center mt-2 font-medium ${
+                    testResult.anyOk ? "text-emerald-400" : "text-destructive"
+                  }`}>
+                    {testResult.anyOk ? "✓ Minimal 1 provider terhubung — siap digunakan!" : "✕ Semua provider gagal — periksa API key"}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

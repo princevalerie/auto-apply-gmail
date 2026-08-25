@@ -2,13 +2,19 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
-import { ArrowRight, Loader2, Sparkles, Send, CheckCircle2, FileText, Cpu, Cloud } from "lucide-react";
+import { ArrowRight, Loader2, Sparkles, Send, CheckCircle2, FileText, Cpu, Cloud, AlertTriangle, RefreshCw, Settings, Zap } from "lucide-react";
 import { FileUploadZone, type SavedFileInfo } from "@/components/file-upload-zone";
 import { ApplicationCard } from "@/components/application-card";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { SettingsPanel, getStoredApiKeys } from "@/components/settings-panel";
 import { toast } from "sonner";
 import { getMimeType, isValidEmail } from "@/lib/utils";
-import { getStoredApiKeys } from "@/components/settings-panel";
+
+interface AIHealthStatus {
+  gemini: { ok: boolean; models: number };
+  groq: { ok: boolean; models: number };
+  anyOk: boolean;
+}
 
 export interface ExtractionResult {
   position: string;
@@ -36,6 +42,11 @@ export default function Home() {
   const [screenshots, setScreenshots] = useState<File[]>([]);
   const [cvFiles, setCvFiles] = useState<File[]>([]);
   const [portfolioFiles, setPortfolioFiles] = useState<File[]>([]);
+
+  // AI Health Check
+  const [aiStatus, setAiStatus] = useState<"loading" | "ok" | "failed">("loading");
+  const [aiHealth, setAiHealth] = useState<AIHealthStatus | null>(null);
+  const [settingsOpenFromGate, setSettingsOpenFromGate] = useState(false);
 
   // Cloud saved files
   const [savedCv, setSavedCv] = useState<SavedFileInfo | null>(null);
@@ -73,11 +84,45 @@ export default function Home() {
     }
   }, []);
 
+  // AI Health Check function
+  const checkAIHealth = useCallback(async () => {
+    setAiStatus("loading");
+    try {
+      const keys = getStoredApiKeys();
+      const params = new URLSearchParams();
+      if (keys.geminiApiKey) params.set("geminiApiKey", keys.geminiApiKey);
+      if (keys.groqApiKey) params.set("groqApiKey", keys.groqApiKey);
+
+      const res = await fetch(`/api/ai/health?${params.toString()}`);
+      if (!res.ok) {
+        setAiStatus("failed");
+        setAiHealth(null);
+        return;
+      }
+
+      const data: AIHealthStatus = await res.json();
+      setAiHealth(data);
+      setAiStatus(data.anyOk ? "ok" : "failed");
+
+      if (data.anyOk) {
+        const providers: string[] = [];
+        if (data.gemini.ok) providers.push(`Gemini (${data.gemini.models} models)`);
+        if (data.groq.ok) providers.push(`Groq (${data.groq.models} models)`);
+        console.log(`[AI Health] Connected: ${providers.join(", ")}`);
+      }
+    } catch (err) {
+      console.error("[AI Health] Check failed:", err);
+      setAiStatus("failed");
+      setAiHealth(null);
+    }
+  }, []);
+
   useEffect(() => {
     if (status === "authenticated") {
       fetchSavedFiles();
+      checkAIHealth();
     }
-  }, [status, fetchSavedFiles]);
+  }, [status, fetchSavedFiles, checkAIHealth]);
 
   const isCheckingCloudFiles = isLoadingSavedFiles || status === "loading";
 
@@ -358,6 +403,113 @@ export default function Home() {
   const validCount = results.filter((r) => isValidEmail(r.email)).length;
   const sentCount = Object.values(sendStates).filter((s) => s.sent).length;
   const allSent = sentCount === results.length && results.length > 0;
+
+  // ─── AI Health Check Loading State ─────────────────────
+  if (aiStatus === "loading") {
+    return (
+      <div className="min-h-screen bg-gradient-mesh flex items-center justify-center">
+        <div className="text-center animate-fade-in">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center mx-auto mb-6 shadow-lg shadow-primary/30 animate-pulse">
+            <Zap className="w-8 h-8 text-white" />
+          </div>
+          <div className="flex items-center gap-3 justify-center mb-3">
+            <Loader2 className="w-5 h-5 animate-spin text-primary" />
+            <span className="text-lg font-semibold text-foreground">Memeriksa koneksi AI...</span>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Memverifikasi API key Gemini & Groq
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── AI Health Check Failed State ─────────────────────
+  if (aiStatus === "failed") {
+    return (
+      <div className="min-h-screen bg-gradient-mesh flex items-center justify-center p-4">
+        <div className="w-full max-w-md animate-fade-in">
+          <div className="card-elevated p-8 text-center">
+            {/* Error Icon */}
+            <div className="w-16 h-16 rounded-2xl bg-destructive/15 flex items-center justify-center mx-auto mb-6 border border-destructive/20">
+              <AlertTriangle className="w-8 h-8 text-destructive" />
+            </div>
+
+            <h2 className="text-xl font-bold text-foreground mb-2">
+              AI Tidak Terhubung
+            </h2>
+            <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
+              Tidak ada AI provider yang merespons. Pastikan API key Gemini atau Groq valid dan aktif.
+            </p>
+
+            {/* Provider Status */}
+            {aiHealth && (
+              <div className="space-y-2 mb-6">
+                <div className={`flex items-center justify-between px-4 py-2.5 rounded-xl text-sm ${
+                  aiHealth.gemini.ok
+                    ? "bg-emerald-500/10 border border-emerald-500/20"
+                    : "bg-destructive/10 border border-destructive/20"
+                }`}>
+                  <span className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4" />
+                    Gemini
+                  </span>
+                  <span className={`font-semibold ${aiHealth.gemini.ok ? "text-emerald-400" : "text-destructive"}`}>
+                    {aiHealth.gemini.ok ? `✓ ${aiHealth.gemini.models} models` : "✕ Gagal"}
+                  </span>
+                </div>
+                <div className={`flex items-center justify-between px-4 py-2.5 rounded-xl text-sm ${
+                  aiHealth.groq.ok
+                    ? "bg-emerald-500/10 border border-emerald-500/20"
+                    : "bg-destructive/10 border border-destructive/20"
+                }`}>
+                  <span className="flex items-center gap-2">
+                    <Cpu className="w-4 h-4" />
+                    Groq
+                  </span>
+                  <span className={`font-semibold ${aiHealth.groq.ok ? "text-emerald-400" : "text-destructive"}`}>
+                    {aiHealth.groq.ok ? `✓ ${aiHealth.groq.models} models` : "✕ Gagal"}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="space-y-3">
+              <button
+                onClick={() => setSettingsOpenFromGate(true)}
+                className="btn-primary w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
+              >
+                <Settings className="w-4 h-4" />
+                Buka API Settings
+              </button>
+              <button
+                onClick={checkAIHealth}
+                className="w-full py-3 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary border border-border transition-colors flex items-center justify-center gap-2"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Coba Lagi
+              </button>
+            </div>
+          </div>
+
+          <p className="text-center text-xs text-muted-foreground mt-4">
+            Dapatkan API key gratis di{" "}
+            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">aistudio.google.com</a>
+            {" "}atau{" "}
+            <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">console.groq.com</a>
+          </p>
+        </div>
+
+        {/* Settings Panel (opened from gate) */}
+        <SettingsPanel
+          open={settingsOpenFromGate}
+          onClose={() => setSettingsOpenFromGate(false)}
+          onKeysUpdated={checkAIHealth}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-mesh pb-20">

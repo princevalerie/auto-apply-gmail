@@ -96,8 +96,9 @@ export async function discoverModels(
   geminiKey?: string,
   groqKey?: string
 ): Promise<CachedModels> {
-  // Return cache if still fresh
-  if (cache && Date.now() - cache.timestamp < CACHE_TTL_MS) {
+  // Skip cache when explicit override keys are provided (need fresh validation)
+  const hasOverrideKeys = !!(geminiKey || groqKey);
+  if (!hasOverrideKeys && cache && Date.now() - cache.timestamp < CACHE_TTL_MS) {
     return cache;
   }
 

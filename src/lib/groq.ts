@@ -1,7 +1,7 @@
 // Groq AI integration via REST API (OpenAI-compatible format)
 // Used as fallback when Gemini hits rate limits
 
-import type { JobInfo, GeneratedEmail, FileAttachment } from "./gemini";
+import type { JobInfo, GeneratedEmail, FileAttachment, ExtractedJobAndEmail } from "./gemini";
 import { discoverModels, getPreferredGroqVisionModel, getPreferredGroqTextModel } from "./model-discovery";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
@@ -244,4 +244,88 @@ Respond HANYA dalam format JSON: {"subject": "...", "body": "..."}`,
 
   const responseText = await callGroq(apiKey, model, messages, true);
   return JSON.parse(responseText) as GeneratedEmail;
+}
+
+// ─── Combined Extract & Generate Email in 1 Single AI Call (Groq) ───
+
+export async function extractAndGenerateGroq(
+  apiKey: string,
+  imageBase64: string,
+  mimeType: string,
+  cvFile?: FileAttachment | null,
+  portfolioFile?: FileAttachment | null
+): Promise<ExtractedJobAndEmail> {
+  const parts: GroqContentPart[] = [
+    {
+      type: "image_url",
+      image_url: { url: `data:${mimeType};base64,${imageBase64}` },
+    },
+  ];
+
+  if (cvFile) {
+    parts.push({
+      type: "image_url",
+      image_url: { url: `data:${cvFile.mimeType};base64,${cvFile.base64}` },
+    });
+  }
+
+  if (portfolioFile) {
+    parts.push({
+      type: "image_url",
+      image_url: { url: `data:${portfolioFile.mimeType};base64,${portfolioFile.base64}` },
+    });
+  }
+
+  parts.push({
+    type: "text",
+    text: `Tugasmu:
+1. Analisis screenshot lowongan kerja (gambar pertama) dan ekstrak:
+   - position: nama posisi
+   - company: nama perusahaan
+   - email: alamat email HR/recruiter (kosongkan string jika tidak ada)
+   - requirements: array requirement utama
+   - location: lokasi kerja (kosongkan jika tidak ada)
+   - subjectInstruction: arahan format subject jika tertulis di screenshot
+
+2. Sekaligus buatkan email lamaran kerja profesional dalam Bahasa Indonesia formal:
+   ${cvFile ? "- Ambil nama lengkap pelamar dari CV (file terlampir) dan sesuaikan skill/pengalaman relevan." : "- Gunakan data pelamar umum."}
+   - Subject: Ikuti arahan subjectInstruction jika ada, atau buat subject profesional mencantumkan posisi & nama asli pelamar dari CV.
+   
+   STATUS & PROFIL PELAMAR (WAJIB DISEBUTKAN):
+   - Pelamar adalah mahasiswa tingkat akhir yang SUDAH TIDAK ADA KELAS / tidak menghadiri perkuliahan tatap muka lagi (bebas teori / hanya tinggal tugas akhir), sehingga memiliki ketersediaan waktu penuh (full availability).
+   
+   ATURAN KETAT:
+   - DILARANG menggunakan placeholder seperti [NAMA_ANDA], [Nama Anda], dll.
+   - Tone sopan, profesional, tenang, percaya diri. Hindari kata klise berlebihan ("sangat tertarik", "besar harapan", dll).
+   - Format struktur: Sapaan -> Salam -> Paragraf 1 (Perkenalan & status mahasiswa no class / full availability) -> Paragraf 2 (Kualifikasi singkat 1-2 kalimat) -> Paragraf 3 (Lampiran CV & terima kasih) -> Tanda tangan & kontak rapi.
+   - Total body email 6-8 kalimat ringkas.`,
+  });
+
+  const messages: GroqMessage[] = [
+    {
+      role: "system",
+      content: `Kamu adalah asisten profesional yang mengekstrak info lowongan dan langsung membuat email lamaran kerja. Selalu respond HANYA dalam format JSON valid dengan struktur:
+{
+  "position": "string",
+  "company": "string",
+  "email": "string (kosongkan jika tidak ada)",
+  "requirements": ["string"],
+  "location": "string (kosongkan jika tidak ada)",
+  "subjectInstruction": "string (kosongkan jika tidak ada)",
+  "emailSubject": "string",
+  "emailBody": "string"
+}`,
+    },
+    {
+      role: "user",
+      content: parts,
+    },
+  ];
+
+  const discovered = await discoverModels(undefined, apiKey);
+  const visionModel = getPreferredGroqVisionModel(discovered.groq);
+  console.log(`[Groq] Using single-call model: ${visionModel}`);
+
+  const responseText = await callGroq(apiKey, visionModel, messages, true);
+  return JSON.parse(responseText) as ExtractedJobAndEmail;
 }

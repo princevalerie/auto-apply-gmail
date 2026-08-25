@@ -1,9 +1,19 @@
-// AI Provider abstraction layer
-// Tries Gemini first, falls back to Groq on rate limit / errors
-
-import { extractJobInfo as geminiExtract, generateEmail as geminiGenerate } from "./gemini";
-import { extractJobInfoGroq, generateEmailGroq } from "./groq";
-import type { JobInfo, GeneratedEmail, FileAttachment } from "./gemini";
+import {
+  extractJobInfo as geminiExtract,
+  generateEmail as geminiGenerate,
+  extractAndGenerateGemini,
+} from "./gemini";
+import {
+  extractJobInfoGroq,
+  generateEmailGroq,
+  extractAndGenerateGroq,
+} from "./groq";
+import type {
+  JobInfo,
+  GeneratedEmail,
+  FileAttachment,
+  ExtractedJobAndEmail,
+} from "./gemini";
 
 export type AIProvider = "gemini" | "groq";
 
@@ -12,17 +22,59 @@ export interface AIResult<T> {
   provider: AIProvider;
 }
 
-function isRateLimitOrQuotaError(error: unknown): boolean {
-  const message = (error as Error)?.message?.toLowerCase() || "";
-  return (
-    message.includes("429") ||
-    message.includes("rate limit") ||
-    message.includes("quota") ||
-    message.includes("resource_exhausted") ||
-    message.includes("too many requests") ||
-    message.includes("exceeded") ||
-    message.includes("limit")
-  );
+// ─── Extract Job Info & Generate Email in 1 Single AI Call ──
+
+export async function extractAndGenerateWithFallback(
+  imageBase64: string,
+  mimeType: string,
+  cvFile?: FileAttachment | null,
+  portfolioFile?: FileAttachment | null,
+  geminiApiKey?: string,
+  groqApiKey?: string
+): Promise<AIResult<ExtractedJobAndEmail>> {
+  const effectiveGroqKey = groqApiKey || process.env.GROQ_API_KEY;
+
+  // Try Gemini first
+  try {
+    const data = await extractAndGenerateGemini(
+      imageBase64,
+      mimeType,
+      cvFile,
+      portfolioFile,
+      geminiApiKey
+    );
+    return { data, provider: "gemini" };
+  } catch (error) {
+    console.warn(
+      "[AI Provider] Gemini single-call failed:",
+      (error as Error).message
+    );
+
+    // Fallback to Groq
+    if (effectiveGroqKey) {
+      console.log("[AI Provider] Falling back to Groq single-call...");
+      try {
+        const data = await extractAndGenerateGroq(
+          effectiveGroqKey,
+          imageBase64,
+          mimeType,
+          cvFile,
+          portfolioFile
+        );
+        return { data, provider: "groq" };
+      } catch (groqError) {
+        console.error(
+          "[AI Provider] Groq single-call also failed:",
+          (groqError as Error).message
+        );
+        throw new Error(
+          `Gemini: ${(error as Error).message} | Groq fallback: ${(groqError as Error).message}`
+        );
+      }
+    }
+
+    throw error;
+  }
 }
 
 // ─── Extract Job Info with Fallback ──────────────────────
@@ -50,14 +102,12 @@ export async function extractJobInfoWithFallback(
         return { data, provider: "groq" };
       } catch (groqError) {
         console.error("[AI Provider] Groq extractJobInfo also failed:", (groqError as Error).message);
-        // Throw the original Gemini error if Groq also fails, unless Groq error is more informative
         throw new Error(
           `Gemini: ${(error as Error).message} | Groq fallback: ${(groqError as Error).message}`
         );
       }
     }
 
-    // No Groq key available, throw original error
     throw error;
   }
 }

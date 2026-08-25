@@ -27,6 +27,17 @@ export interface GeneratedEmail {
   body: string;
 }
 
+export interface ExtractedJobAndEmail {
+  position: string;
+  company: string;
+  email: string;
+  requirements: string[];
+  location: string;
+  subjectInstruction: string;
+  emailSubject: string;
+  emailBody: string;
+}
+
 export interface FileAttachment {
   base64: string;
   mimeType: string;
@@ -290,4 +301,159 @@ TOTAL body email: 6-8 kalimat. Ringkas, sopan, dan berbobot.`,
   }
 
   throw lastError || new Error("All Gemini models failed");
+}
+
+// ─── Combined Extract & Generate Email in 1 Single AI Call ───
+
+export async function extractAndGenerateGemini(
+  imageBase64: string,
+  mimeType: string,
+  cvFile?: FileAttachment | null,
+  portfolioFile?: FileAttachment | null,
+  apiKey?: string
+): Promise<ExtractedJobAndEmail> {
+  const genAI = getGenAI(apiKey);
+
+  const combinedSchema: ResponseSchema = {
+    type: SchemaType.OBJECT,
+    properties: {
+      position: {
+        type: SchemaType.STRING,
+        description: "Nama posisi/role yang dilamar dari screenshot",
+      },
+      company: {
+        type: SchemaType.STRING,
+        description: "Nama perusahaan yang membuka lowongan dari screenshot",
+      },
+      email: {
+        type: SchemaType.STRING,
+        description: "Alamat email tujuan recruiter dari screenshot (kosongkan jika tidak ada)",
+      },
+      requirements: {
+        type: SchemaType.ARRAY,
+        items: { type: SchemaType.STRING },
+        description: "Daftar requirement/kualifikasi utama dari screenshot",
+      },
+      location: {
+        type: SchemaType.STRING,
+        description: "Lokasi kerja dari screenshot (kosongkan jika tidak ada)",
+      },
+      subjectInstruction: {
+        type: SchemaType.STRING,
+        description: "Instruksi format subject email dari screenshot (kosongkan jika tidak ada arahan spesifik)",
+      },
+      emailSubject: {
+        type: SchemaType.STRING,
+        description: "Subject email lamaran kerja yang sudah terisi lengkap (nama asli pelamar dari CV, posisi yang dilamar, tanpa placeholder)",
+      },
+      emailBody: {
+        type: SchemaType.STRING,
+        description: "Isi/body email lamaran kerja lengkap dalam Bahasa Indonesia formal dan sopan (tanpa placeholder)",
+      },
+    },
+    required: [
+      "position",
+      "company",
+      "email",
+      "requirements",
+      "location",
+      "subjectInstruction",
+      "emailSubject",
+      "emailBody",
+    ],
+  };
+
+  // Determine time of day for greeting (WIB)
+  const currentHour = parseInt(
+    new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta", hour: "numeric", hour12: false }),
+    10
+  );
+  let timeGreeting = "pagi";
+  if (currentHour >= 11 && currentHour < 15) timeGreeting = "siang";
+  else if (currentHour >= 15 && currentHour < 18) timeGreeting = "sore";
+  else if (currentHour >= 18 || currentHour < 3) timeGreeting = "malam";
+
+  // Build content parts
+  const parts: Array<{ text: string } | { inlineData: { data: string; mimeType: string } }> = [
+    {
+      inlineData: {
+        data: imageBase64,
+        mimeType: mimeType,
+      },
+    },
+  ];
+
+  if (cvFile) {
+    parts.push({
+      inlineData: {
+        data: cvFile.base64,
+        mimeType: cvFile.mimeType,
+      },
+    });
+  }
+
+  if (portfolioFile) {
+    parts.push({
+      inlineData: {
+        data: portfolioFile.base64,
+        mimeType: portfolioFile.mimeType,
+      },
+    });
+  }
+
+  parts.push({
+    text: `Tugasmu:
+1. Analisis screenshot lowongan kerja (gambar pertama) dan ekstrak:
+   - position: nama posisi
+   - company: nama perusahaan
+   - email: alamat email HR/recruiter (kosongkan string jika tidak ada)
+   - requirements: array requirement utama
+   - location: lokasi kerja (kosongkan jika tidak ada)
+   - subjectInstruction: arahan format subject jika tertulis di screenshot
+
+2. Sekaligus buatkan email lamaran kerja profesional dalam Bahasa Indonesia formal:
+   ${cvFile ? "- Ambil nama lengkap pelamar dari CV (file terlampir) dan sesuaikan skill/pengalaman relevan." : "- Gunakan data pelamar umum."}
+   - Subject: Ikuti arahan subjectInstruction jika ada, atau buat subject profesional mencantumkan posisi & nama asli pelamar dari CV.
+   
+   STATUS & PROFIL PELAMAR (WAJIB DISEBUTKAN):
+   - Pelamar adalah mahasiswa tingkat akhir yang SUDAH TIDAK ADA KELAS / tidak menghadiri perkuliahan tatap muka lagi (bebas teori / hanya tinggal tugas akhir), sehingga memiliki ketersediaan waktu penuh (full availability).
+   
+   ATURAN KETAT:
+   - DILARANG menggunakan placeholder seperti [NAMA_ANDA], [Nama Anda], dll.
+   - Tone sopan, profesional, tenang, percaya diri. Hindari kata klise berlebihan ("sangat tertarik", "besar harapan", dll).
+   - Format struktur: Sapaan -> Salam -> Paragraf 1 (Perkenalan & status mahasiswa no class / full availability) -> Paragraf 2 (Kualifikasi singkat 1-2 kalimat) -> Paragraf 3 (Lampiran CV & terima kasih) -> Tanda tangan & kontak rapi.
+   - Total body email 6-8 kalimat ringkas.`,
+  });
+
+  let lastError: Error | null = null;
+  const discovered = await discoverModels(apiKey);
+  const modelsToTry = getPreferredGeminiModels(discovered.gemini);
+
+  for (const modelName of modelsToTry) {
+    try {
+      console.log(`[Gemini] Trying single-call model: ${modelName}`);
+      const model = genAI.getGenerativeModel({ model: modelName });
+
+      const result = await model.generateContent({
+        contents: [
+          {
+            role: "user",
+            parts,
+          },
+        ],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: combinedSchema,
+        },
+      });
+
+      const responseText = result.response.text();
+      return JSON.parse(responseText) as ExtractedJobAndEmail;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.warn(`[Gemini] Single-call model ${modelName} failed: ${lastError.message}`);
+    }
+  }
+
+  throw lastError || new Error("All Gemini models failed in single-call");
 }

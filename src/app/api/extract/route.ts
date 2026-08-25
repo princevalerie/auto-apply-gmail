@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { extractJobInfoWithFallback, generateEmailWithFallback } from "@/lib/ai-provider";
+import { extractAndGenerateWithFallback } from "@/lib/ai-provider";
 import type { FileAttachment } from "@/lib/gemini";
-import { cacheFiles } from "@/lib/file-cache";
+import { cacheFiles, getCachedFiles } from "@/lib/file-cache";
 import { uploadFileToS3, downloadFileFromS3Url } from "@/lib/s3";
 import { saveFileRecord, upsertUser, getUserFile } from "@/lib/db";
+
+// Allow up to 60s for AI extraction + email generation
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -32,8 +35,8 @@ export async function POST(request: NextRequest) {
     const userId = (session.user.id || session.user.email || "") as string;
     const userEmail = (session.user.email || "") as string;
 
-    // Ensure user exists in database
-    await upsertUser({
+    // Background user upsert (non-blocking for speed)
+    upsertUser({
       id: userId,
       name: session.user.name,
       email: userEmail,
@@ -42,60 +45,59 @@ export async function POST(request: NextRequest) {
 
     let effectiveCvBase64 = cvBase64;
 
-    // If new CV was uploaded, persist it to S3 & Database
+    // If new CV was uploaded in this request, cache it and asynchronously persist to S3/DB
     if (userId && cvBase64) {
       cacheFiles(userId, cvBase64);
 
-      try {
-        const cvBuffer = Buffer.from(cvBase64, "base64");
-        const s3Res = await uploadFileToS3({
-          userId: userId,
-          fileType: "cv",
-          fileName: "CV.pdf",
-          fileBuffer: cvBuffer,
-          mimeType: "application/pdf",
-        });
+      // Async S3 + DB persist (runs in parallel, non-blocking)
+      (async () => {
+        try {
+          const cvBuffer = Buffer.from(cvBase64, "base64");
+          const s3Res = await uploadFileToS3({
+            userId: userId,
+            fileType: "cv",
+            fileName: "CV.pdf",
+            fileBuffer: cvBuffer,
+            mimeType: "application/pdf",
+          });
 
-        await saveFileRecord({
-          userId: userId,
-          userEmail: userEmail,
-          fileType: "cv",
-          fileName: "CV.pdf",
-          fileUrl: s3Res.url,
-          fileSize: cvBuffer.length,
-          mimeType: "application/pdf",
-        });
-        console.log("[Extract] CV successfully saved to S3 & Database");
-      } catch (saveErr) {
-        console.warn("[Extract] Could not persist CV to S3/DB:", (saveErr as Error).message);
-      }
-    } else if (!effectiveCvBase64 && userId) {
-      // If no CV uploaded in this session, auto-load saved CV from S3/Database
-      try {
-        const savedCv = await getUserFile(userId, "cv", userEmail);
-        if (savedCv?.file_url) {
-          const cvBuffer = await downloadFileFromS3Url(savedCv.file_url);
-          effectiveCvBase64 = cvBuffer.toString("base64");
-          cacheFiles(userId, effectiveCvBase64);
-          console.log("[Extract] Auto-loaded saved CV from Cloud for AI analysis");
+          await saveFileRecord({
+            userId: userId,
+            userEmail: userEmail,
+            fileType: "cv",
+            fileName: "CV.pdf",
+            fileUrl: s3Res.url,
+            fileSize: cvBuffer.length,
+            mimeType: "application/pdf",
+          });
+          console.log("[Extract] CV successfully persisted to S3 & Database");
+        } catch (saveErr) {
+          console.warn("[Extract] S3/DB persist warning:", (saveErr as Error).message);
         }
-      } catch (loadErr) {
-        console.warn("[Extract] Failed to auto-load saved CV from S3:", (loadErr as Error).message);
+      })();
+    } else if (!effectiveCvBase64 && userId) {
+      // Check fast in-memory cache first
+      const cached = getCachedFiles(userId);
+      if (cached.cv?.base64) {
+        effectiveCvBase64 = cached.cv.base64;
+      } else {
+        // Fallback: load saved CV from S3/Database
+        try {
+          const savedCv = await getUserFile(userId, "cv", userEmail);
+          if (savedCv?.file_url) {
+            const cvBuffer = await downloadFileFromS3Url(savedCv.file_url);
+            effectiveCvBase64 = cvBuffer.toString("base64");
+            cacheFiles(userId, effectiveCvBase64);
+            console.log("[Extract] Loaded CV from S3");
+          }
+        } catch (loadErr) {
+          console.warn("[Extract] Failed to load saved CV:", (loadErr as Error).message);
+        }
       }
     }
 
-    // Step 1: Extract job info from screenshot (with fallback)
-    const extractResult = await extractJobInfoWithFallback(
-      imageBase64,
-      mimeType,
-      geminiApiKey,
-      groqApiKey
-    );
-    const jobInfo = extractResult.data;
-
-    // Step 2: Prepare CV for AI email generation (portfolio NOT sent here — attached at send time)
+    // Prepare CV attachment
     let cvFile: FileAttachment | null = null;
-
     if (effectiveCvBase64) {
       cvFile = {
         base64: effectiveCvBase64,
@@ -103,29 +105,33 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    // Step 3: Generate email content with CV context (with fallback)
-    // Portfolio is NOT passed to AI — it will be attached as-is when sending email
-    const emailResult = await generateEmailWithFallback(
-      jobInfo,
+    // ─── 1 Single AI Call: Extract Job Info & Generate Email ───
+    const aiResult = await extractAndGenerateWithFallback(
+      imageBase64,
+      mimeType,
       cvFile,
-      null, // portfolio not sent to AI
+      null, // portfolio is attached at send time
       geminiApiKey,
       groqApiKey
     );
-    const emailContent = emailResult.data;
 
-    // Step 4: Flag if email not detected
-    const emailValid = jobInfo.email && jobInfo.email.includes("@");
+    const resultData = aiResult.data;
+    const emailValid = Boolean(resultData.email && resultData.email.includes("@"));
 
     return NextResponse.json({
       success: true,
       data: {
-        ...jobInfo,
-        emailSubject: emailContent.subject,
-        emailBody: emailContent.body,
+        position: resultData.position || "Posisi Lamaran",
+        company: resultData.company || "Perusahaan",
+        email: resultData.email || "",
+        location: resultData.location || "",
+        requirements: resultData.requirements || [],
+        subjectInstruction: resultData.subjectInstruction || "",
+        emailSubject: resultData.emailSubject || "",
+        emailBody: resultData.emailBody || "",
         emailValid,
-        extractProvider: extractResult.provider,
-        emailProvider: emailResult.provider,
+        extractProvider: aiResult.provider,
+        emailProvider: aiResult.provider,
         warning: !emailValid
           ? "Email tujuan tidak terdeteksi dari screenshot. Silakan masukkan email secara manual."
           : null,
@@ -134,8 +140,6 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const errorMessage = (error as Error).message;
     console.error("Extract error:", errorMessage);
-    console.error("ENV check — GEMINI_API_KEY:", !!process.env.GEMINI_API_KEY ? "SET" : "MISSING");
-    console.error("ENV check — GROQ_API_KEY:", !!process.env.GROQ_API_KEY ? "SET" : "MISSING");
     return NextResponse.json(
       {
         error: `Gagal mengekstrak: ${errorMessage}`,

@@ -217,6 +217,10 @@ ${requirementsList}
 ${cvFile ? "File CV pelamar terlampir di atas — baca dan gunakan informasi dari CV (nama lengkap, skill, pengalaman, pendidikan, kontak) untuk mempersonalisasi email." : ""}
 ${portfolioFile ? "File portfolio pelamar juga terlampir — gunakan informasi proyek/karya di dalamnya jika relevan." : ""}
 
+STATUS & PROFIL PELAMAR (WAJIB DISEBUTKAN DENGAN JELAS):
+- Pelamar adalah mahasiswa tingkat akhir (final year student) yang SUDAH TIDAK ADA KELAS / tidak menghadiri perkuliahan tatap muka lagi (no class attended / sudah menyelesaikan seluruh mata kuliah perkuliahan & bebas teori / hanya tinggal tugas akhir).
+- Jelaskan bahwa pelamar memiliki ketersediaan waktu penuh (full availability) dan fleksibilitas untuk bekerja secara optimal tanpa terhalang jadwal perkuliahan.
+
 Aturan KETAT:
 - DILARANG menggunakan placeholder seperti [NAMA_ANDA], [Nama Anda], [NAMA], atau sejenisnya. Semua informasi HARUS terisi dengan data asli dari CV.
 ${cvFile ? "- Ambil nama lengkap pelamar dari CV yang terlampir. Gunakan nama asli tersebut di subject dan body email." : "- Jika tidak ada CV, gunakan nama 'Pelamar' sebagai fallback."}
@@ -238,7 +242,7 @@ STRUKTUR BODY EMAIL (WAJIB IKUTI FORMAT INI):
 1. Baris Sapaan Penerima: "${companyTarget}"
 2. Baris Salam Pembuka: "Selamat pagi/siang Bapak/Ibu," (atau "Dengan hormat,")
 3. Paragraf 1 (Perkenalan Luwes & Maksud):
-   Mulai dengan gaya mengalir sopan, contoh: "Perkenalkan, saya [Nama Lengkap Asli], [status pendidikan/latar belakang dari CV]. Melalui email ini, saya bermaksud mengajukan lamaran untuk posisi ${jobInfo.position} di ${jobInfo.company}." (Cukup 1-2 kalimat).
+   Mulai dengan gaya mengalir sopan dan sebutkan status mahasiswa tingkat akhir yang sudah tidak ada kelas perkuliahan aktif / full availability. Contoh: "Perkenalkan, saya [Nama Lengkap Asli], mahasiswa tingkat akhir [Jurusan & Universitas dari CV] yang telah menyelesaikan seluruh mata kuliah perkuliahan tanpa ada kelas tatap muka yang perlu dihadiri, sehingga memiliki ketersediaan waktu penuh. Melalui email ini, saya bermaksud mengajukan lamaran untuk posisi ${jobInfo.position} di ${jobInfo.company}." (Cukup 1-2 kalimat).
 4. Paragraf 2 (Kualifikasi & Pengalaman Relevan):
    Sebutkan 1-2 pengalaman/proyek/alat kerja yang PALING RELEVAN secara faktual berdasarkan CV. Cukup 2-3 kalimat.
 5. Paragraf 3 (Lampiran & Ucapan Terima Kasih):

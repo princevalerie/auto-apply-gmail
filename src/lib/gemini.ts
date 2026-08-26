@@ -408,17 +408,17 @@ export async function extractAndGenerateGemini(
    - TONE & STYLE: Calm, confident, polite, and articulate.
    - FORBIDDEN PHRASES: NEVER use desperate or cliché wording like "available anytime", "greatly looking forward", "I really hope", "pleading for opportunity", etc.
    - APPLICANT MAJOR: "Informatics Engineering" or "Computer Science" (DO NOT write Electronics).
-   - APPLICANT PROFILE: Final-year student who has completed all coursework with no on-campus classes remaining (full-time availability).
+   - APPLICANT PROFILE: Final-year student currently completing online-only coursework with no mandatory offline/on-campus classes (providing full-time availability).
    - Real contact data: Extract applicant's full name, WhatsApp/phone number, and email from the attached CV.
    - NO PLACEHOLDERS ([NAME], [Company], etc). Everything must be populated with real data.
 
-MANDATORY EMAIL BODY STRUCTURE (Every block MUST be separated by a double line break \\n\\n):
+MANDATORY EMAIL BODY STRUCTURE (Every block MUST be separated by a double line break \n\n):
 
 Dear Hiring Team at [Company Name],
 
 Good day,
 
-My name is [Full Name from CV], a final-year Informatics Engineering student who has completed all coursework with no remaining on-campus classes, giving me full-time availability. I am writing to apply for the [Position] position at [Company].
+My name is [Full Name from CV], a final-year Informatics Engineering student currently conducting my studies online with no mandatory on-campus classes, giving me full-time availability. I am writing to apply for the [Position] position at [Company].
 
 [1-2 crisp, professional sentences connecting the applicant's specific skills/experiences from the CV directly to the requirements listed in the vacancy, such as data analysis, SQL, Power BI, Python, Excel, etc.].
 
@@ -445,17 +445,17 @@ WhatsApp: [WhatsApp/Phone number from CV]
      * "sangat tertarik" / "sangat berminat" / "sangat berharap"
      * "besar harapan saya" / "mohon diberi kesempatan"
    - JURUSAN PELAMAR: "Teknik Informatika" (DILARANG KERAS menulis "Informatika Elektronika" atau kata "Elektronika").
-   - PROFIL PELAMAR: Mahasiswa tingkat akhir Teknik Informatika yang telah menyelesaikan seluruh mata kuliah perkuliahan tanpa kelas tatap muka aktif (bebas teori), sehingga memiliki ketersediaan waktu penuh (full-time availability) untuk bekerja.
+   - PROFIL PELAMAR: Mahasiswa tingkat akhir Teknik Informatika yang saat ini menjalankan perkuliahan secara daring (online) tanpa kewajiban kelas tatap muka (offline), sehingga memiliki ketersediaan waktu penuh (full-time availability) untuk bekerja.
    - Ambil nama lengkap asli pelamar, nomor WhatsApp/HP, dan email langsung dari file CV terlampir.
    - DILARANG MENGGUNAKAN PLACEHOLDER apapun ([NAMA], [Perusahaan], dll).
 
-STRUKTUR WAJIB ISI EMAIL (Setiap bagian WAJIB dipisahkan dengan double line break \\n\\n):
+STRUKTUR WAJIB ISI EMAIL (Setiap bagian WAJIB dipisahkan dengan double line break \n\n):
 
 Kepada Tim Rekrutmen [Nama Perusahaan],
 
 Selamat pagi/siang Bapak/Ibu,
 
-Perkenalkan, saya [Nama Lengkap Asli Pelamar dari CV], mahasiswa tingkat akhir Teknik Informatika yang telah menyelesaikan seluruh mata kuliah perkuliahan tanpa ada kelas tatap muka aktif, sehingga memiliki ketersediaan waktu penuh untuk bekerja secara optimal. Melalui email ini, saya bermaksud mengajukan lamaran untuk posisi [Posisi] di [Perusahaan].
+Perkenalkan, saya [Nama Lengkap Asli Pelamar dari CV], mahasiswa tingkat akhir Teknik Informatika yang saat ini menjalankan perkuliahan secara daring (online) tanpa ada kewajiban kelas tatap muka (offline), sehingga memiliki ketersediaan waktu penuh untuk bekerja secara optimal. Melalui email ini, saya bermaksud mengajukan lamaran untuk posisi [Posisi] di [Perusahaan].
 
 [1-2 kalimat fakta relevan yang mencocokkan keahlian dan pengalaman pelamar dari CV dengan kebutuhan posisi di screenshot, misalnya pengolahan data menggunakan SQL, Looker Studio, Power BI, Python, Excel, dsb].
 

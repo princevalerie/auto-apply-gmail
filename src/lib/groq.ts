@@ -185,8 +185,8 @@ ${cvFile ? "File CV pelamar terlampir di atas — baca dan gunakan informasi dar
 ${portfolioFile ? "File portfolio pelamar juga terlampir — gunakan informasi proyek/karya di dalamnya jika relevan." : ""}
 
 STATUS & PROFIL PELAMAR (WAJIB DISEBUTKAN DENGAN JELAS):
-- Pelamar adalah mahasiswa tingkat akhir (final year student) yang SUDAH TIDAK ADA KELAS / tidak menghadiri perkuliahan tatap muka lagi (no class attended / sudah menyelesaikan seluruh mata kuliah perkuliahan & bebas teori / hanya tinggal tugas akhir).
-- Jelaskan bahwa pelamar memiliki ketersediaan waktu penuh (full availability) dan fleksibilitas untuk bekerja secara optimal tanpa terhalang jadwal perkuliahan.
+- Pelamar adalah mahasiswa tingkat akhir (final-year student) yang menjalankan perkuliahan secara online/daring tanpa ada jadwal kelas tatap muka/offline aktif.
+- Jelaskan bahwa pelamar memiliki ketersediaan waktu penuh (full-time availability) dan fleksibilitas tinggi untuk bekerja secara optimal.
 
 Aturan KETAT:
 - DILARANG menggunakan placeholder seperti [NAMA_ANDA], [Nama Anda], [NAMA], atau sejenisnya. Semua informasi HARUS terisi dengan data asli dari CV.
@@ -209,7 +209,7 @@ STRUKTUR BODY EMAIL (WAJIB IKUTI FORMAT INI):
 1. Baris Sapaan Penerima: "${companyTarget}"
 2. Baris Salam Pembuka: "Selamat pagi/siang Bapak/Ibu," (atau "Dengan hormat,")
 3. Paragraf 1 (Perkenalan Luwes & Maksud):
-   Mulai dengan gaya mengalir sopan dan sebutkan status mahasiswa tingkat akhir yang sudah tidak ada kelas perkuliahan aktif / full availability. Contoh: "Perkenalkan, saya [Nama Lengkap Asli], mahasiswa tingkat akhir [Jurusan & Universitas dari CV] yang telah menyelesaikan seluruh mata kuliah perkuliahan tanpa ada kelas tatap muka yang perlu dihadiri, sehingga memiliki ketersediaan waktu penuh. Melalui email ini, saya bermaksud mengajukan lamaran untuk posisi ${jobInfo.position} di ${jobInfo.company}." (Cukup 1-2 kalimat).
+   Mulai dengan gaya mengalir sopan dan sebutkan status mahasiswa tingkat akhir dengan perkuliahan online / tanpa kelas offline aktif sehingga memiliki full-time availability. Contoh: "Perkenalkan, saya [Nama Lengkap Asli], mahasiswa tingkat akhir [Jurusan & Universitas dari CV] yang saat ini menjalankan perkuliahan secara daring (online) tanpa kewajiban kelas tatap muka (offline), sehingga memiliki ketersediaan waktu penuh. Melalui email ini, saya bermaksud mengajukan lamaran untuk posisi ${jobInfo.position} di ${jobInfo.company}." (Cukup 1-2 kalimat).
 4. Paragraf 2 (Kualifikasi & Pengalaman Relevan):
    Sebutkan 1-2 pengalaman/proyek/alat kerja yang PALING RELEVAN secara faktual berdasarkan CV. Cukup 2-3 kalimat.
 5. Paragraf 3 (Lampiran & Ucapan Terima Kasih):
@@ -289,13 +289,12 @@ export async function extractAndGenerateGroq(
    - subjectInstruction: subject format instructions from screenshot if any
 
 2. Write a HIGH-QUALITY, CONFIDENT, AND ELEGANT job application email in standard professional business English:
-   - MATCHMAKING LOGIC: Carefully cross-reference the job requirements from the screenshot (e.g. tools, skills, tasks) with the applicant's actual experiences and projects in the attached CV. Specifically highlight 1-2 concrete qualifications that demonstrate why the applicant is a great fit for this exact role.
-   - TONE & STYLE: Calm, confident, polite, and articulate.
-   - FORBIDDEN PHRASES: NEVER use desperate or cliché wording like "available anytime", "greatly looking forward", "I really hope", "pleading for opportunity", etc.
-   - APPLICANT MAJOR: "Informatics Engineering" or "Computer Science" (DO NOT write Electronics).
-   - APPLICANT PROFILE: Final-year student who has completed all coursework with no on-campus classes remaining (full-time availability).
-   - Real contact data: Extract applicant's full name, WhatsApp/phone number, and email from the attached CV.
-   - NO PLACEHOLDERS ([NAME], [Company], etc). Everything must be populated with real data.
+   - MATCHMAKING LOGIC: Carefully cross-reference the job requirements from the screenshot (e.g. tools, skills, tasks) with the applicant's actual experiences and projects in the attac    - TONE & STYLE: Calm, confident, polite, and articulate.
+    - FORBIDDEN PHRASES: NEVER use desperate or cliché wording like "available anytime", "greatly looking forward", "I really hope", "pleading for opportunity", etc.
+    - APPLICANT MAJOR: "Informatics Engineering" or "Computer Science" (DO NOT write Electronics).
+    - APPLICANT PROFILE: Final-year student currently completing online-only coursework with no mandatory offline/on-campus classes (providing full-time availability).
+    - Real contact data: Extract applicant's full name, WhatsApp/phone number, and email from the attached CV.
+    - NO PLACEHOLDERS ([NAME], [Company], etc). Everything must be populated with real data.
 
 MANDATORY EMAIL BODY STRUCTURE (Every block MUST be separated by a double line break \\n\\n):
 
@@ -303,7 +302,7 @@ Dear Hiring Team at [Company Name],
 
 Good day,
 
-My name is [Full Name from CV], a final-year Informatics Engineering student who has completed all coursework with no remaining on-campus classes, giving me full-time availability. I am writing to apply for the [Position] position at [Company].
+My name is [Full Name from CV], a final-year Informatics Engineering student currently conducting my studies online with no mandatory on-campus classes, giving me full-time availability. I am writing to apply for the [Position] position at [Company].
 
 [1-2 crisp, professional sentences connecting the applicant's specific skills/experiences from the CV directly to the requirements listed in the vacancy, such as data analysis, SQL, Power BI, Python, Excel, etc.].
 
@@ -330,7 +329,7 @@ WhatsApp: [WhatsApp/Phone number from CV]
      * "sangat tertarik" / "sangat berminat" / "sangat berharap"
      * "besar harapan saya" / "mohon diberi kesempatan"
    - JURUSAN PELAMAR: "Teknik Informatika" (DILARANG KERAS menulis "Informatika Elektronika" atau kata "Elektronika").
-   - PROFIL PELAMAR: Mahasiswa tingkat akhir Teknik Informatika yang telah menyelesaikan seluruh mata kuliah perkuliahan tanpa kelas tatap muka aktif (bebas teori), sehingga memiliki ketersediaan waktu penuh (full-time availability) untuk bekerja.
+   - PROFIL PELAMAR: Mahasiswa tingkat akhir Teknik Informatika yang saat ini menjalankan perkuliahan secara daring (online) tanpa kewajiban kelas tatap muka (offline), sehingga memiliki ketersediaan waktu penuh (full-time availability) untuk bekerja.
    - Ambil nama lengkap asli pelamar, nomor WhatsApp/HP, dan email langsung dari file CV terlampir.
    - DILARANG MENGGUNAKAN PLACEHOLDER apapun ([NAMA], [Perusahaan], dll).
 
@@ -340,7 +339,8 @@ Kepada Tim Rekrutmen [Nama Perusahaan],
 
 Selamat pagi/siang Bapak/Ibu,
 
-Perkenalkan, saya [Nama Lengkap Asli Pelamar dari CV], mahasiswa tingkat akhir Teknik Informatika yang telah menyelesaikan seluruh mata kuliah perkuliahan tanpa ada kelas tatap muka aktif, sehingga memiliki ketersediaan waktu penuh untuk bekerja secara optimal. Melalui email ini, saya bermaksud mengajukan lamaran untuk posisi [Posisi] di [Perusahaan].
+Perkenalkan, saya [Nama Lengkap Asli Pelamar dari CV], mahasiswa tingkat akhir Teknik Informatika yang saat ini menjalankan perkuliahan secara daring (online) tanpa ada kewajiban kelas tatap muka (offline), sehingga memiliki ketersediaan waktu penuh untuk bekerja secara optimal. Melalui email ini, saya bermaksud mengajukan lamaran untuk posisi [Posisi] di [Perusahaan].
+
 
 [1-2 kalimat fakta relevan yang mencocokkan keahlian dan pengalaman pelamar dari CV dengan kebutuhan posisi di screenshot, misalnya pengolahan data menggunakan SQL, Looker Studio, Power BI, Python, Excel, dsb].
 

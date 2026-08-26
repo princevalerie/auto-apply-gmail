@@ -412,7 +412,7 @@ export async function extractAndGenerateGemini(
    - Real contact data: Extract applicant's full name, WhatsApp/phone number, and email from the attached CV.
    - NO PLACEHOLDERS ([NAME], [Company], etc). Everything must be populated with real data.
 
-MANDATORY EMAIL BODY STRUCTURE (Every block MUST be separated by a double line break \n\n):
+MANDATORY EMAIL BODY STRUCTURE (Every block MUST be separated by a double line break \\n\\n):
 
 Dear Hiring Team at [Company Name],
 

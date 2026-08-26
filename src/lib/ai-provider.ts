@@ -17,6 +17,11 @@ import type {
 
 export type AIProvider = "gemini" | "groq";
 
+export interface SelectedModelConfig {
+  provider: "gemini" | "groq";
+  modelId: string;
+}
+
 export interface AIResult<T> {
   data: T;
   provider: AIProvider;
@@ -31,11 +36,57 @@ export async function extractAndGenerateWithFallback(
   portfolioFile?: FileAttachment | null,
   geminiApiKey?: string,
   groqApiKey?: string,
-  language: "id" | "en" = "id"
+  language: "id" | "en" = "id",
+  selectedModel?: SelectedModelConfig | null
 ): Promise<AIResult<ExtractedJobAndEmail>> {
   const effectiveGroqKey = groqApiKey || process.env.GROQ_API_KEY;
 
-  // Try Gemini first
+  // If a specific model is selected, try that model first
+  if (selectedModel) {
+    console.log(`[AI Provider] User selected model: ${selectedModel.provider}/${selectedModel.modelId}`);
+    
+    if (selectedModel.provider === "gemini") {
+      try {
+        const data = await extractAndGenerateGemini(
+          imageBase64,
+          mimeType,
+          cvFile,
+          portfolioFile,
+          geminiApiKey,
+          language,
+          selectedModel.modelId
+        );
+        return { data, provider: "gemini" };
+      } catch (error) {
+        console.warn(
+          `[AI Provider] Selected Gemini model ${selectedModel.modelId} failed:`,
+          (error as Error).message
+        );
+        // Fall through to normal fallback flow
+      }
+    } else if (selectedModel.provider === "groq" && effectiveGroqKey) {
+      try {
+        const data = await extractAndGenerateGroq(
+          effectiveGroqKey,
+          imageBase64,
+          mimeType,
+          cvFile,
+          portfolioFile,
+          language,
+          selectedModel.modelId
+        );
+        return { data, provider: "groq" };
+      } catch (error) {
+        console.warn(
+          `[AI Provider] Selected Groq model ${selectedModel.modelId} failed:`,
+          (error as Error).message
+        );
+        // Fall through to normal fallback flow
+      }
+    }
+  }
+
+  // Normal auto fallback flow: Try Gemini first
   try {
     const data = await extractAndGenerateGemini(
       imageBase64,

@@ -24,6 +24,7 @@ export async function POST(request: NextRequest) {
       geminiApiKey,
       groqApiKey,
       language = "id",
+      selectedModel,
     } = body;
 
     if (!imageBase64 || !mimeType) {
@@ -114,7 +115,8 @@ export async function POST(request: NextRequest) {
       null, // portfolio is attached at send time
       geminiApiKey,
       groqApiKey,
-      language
+      language,
+      selectedModel
     );
 
     const resultData = aiResult.data;

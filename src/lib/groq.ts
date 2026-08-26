@@ -254,7 +254,8 @@ export async function extractAndGenerateGroq(
   mimeType: string,
   cvFile?: FileAttachment | null,
   portfolioFile?: FileAttachment | null,
-  language: "id" | "en" = "id"
+  language: "id" | "en" = "id",
+  overrideModel?: string
 ): Promise<ExtractedJobAndEmail> {
   const parts: GroqContentPart[] = [
     {
@@ -376,8 +377,14 @@ WhatsApp: [Nomor WhatsApp/HP dari CV, contoh: +62 8xx-xxxx-xxxx]
     },
   ];
 
-  const discovered = await discoverModels(undefined, apiKey);
-  const visionModel = getPreferredGroqVisionModel(discovered.groq);
+  let visionModel: string;
+  if (overrideModel) {
+    console.log(`[Groq] Using user-selected model: ${overrideModel}`);
+    visionModel = overrideModel;
+  } else {
+    const discovered = await discoverModels(undefined, apiKey);
+    visionModel = getPreferredGroqVisionModel(discovered.groq);
+  }
   console.log(`[Groq] Using single-call model (${language}): ${visionModel}`);
 
   const responseText = await callGroq(apiKey, visionModel, messages, true);

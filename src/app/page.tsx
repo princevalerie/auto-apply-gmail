@@ -7,6 +7,7 @@ import { FileUploadZone, type SavedFileInfo } from "@/components/file-upload-zon
 import { ApplicationCard } from "@/components/application-card";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { SettingsPanel, getStoredApiKeys } from "@/components/settings-panel";
+import { getStoredSelectedModel } from "@/components/model-selector";
 import { toast } from "sonner";
 import { cn, getMimeType, isValidEmail } from "@/lib/utils";
 
@@ -262,6 +263,7 @@ export default function Home() {
             mimeType,
             cvBase64,
             language: emailLanguage,
+            selectedModel: getStoredSelectedModel(),
             ...getStoredApiKeys(),
           }),
         });

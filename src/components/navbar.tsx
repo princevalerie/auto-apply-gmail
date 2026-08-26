@@ -16,6 +16,7 @@ import {
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { SettingsPanel } from "@/components/settings-panel";
+import { ModelSelector } from "@/components/model-selector";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: Home },
@@ -72,6 +73,11 @@ export function Navbar() {
             );
           })}
         </nav>
+
+        {/* Model Selector */}
+        <div className="px-4 pb-2">
+          <ModelSelector />
+        </div>
 
         {/* User Profile */}
         <div className="p-4 border-t border-border">
@@ -155,6 +161,11 @@ export function Navbar() {
                 </Link>
               );
             })}
+            {/* Model Selector (Mobile) */}
+            <div className="px-2 py-1">
+              <ModelSelector />
+            </div>
+
             <button
               onClick={() => { setSettingsOpen(true); setMobileOpen(false); }}
               className="flex items-center gap-2 w-full px-4 py-3 rounded-xl text-sm text-muted-foreground hover:text-foreground hover:bg-secondary"

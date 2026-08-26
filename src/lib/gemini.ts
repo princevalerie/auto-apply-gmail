@@ -311,7 +311,8 @@ export async function extractAndGenerateGemini(
   cvFile?: FileAttachment | null,
   portfolioFile?: FileAttachment | null,
   apiKey?: string,
-  language: "id" | "en" = "id"
+  language: "id" | "en" = "id",
+  overrideModel?: string
 ): Promise<ExtractedJobAndEmail> {
   const genAI = getGenAI(apiKey);
 
@@ -468,8 +469,15 @@ WhatsApp: [Nomor WhatsApp/HP dari CV, contoh: +62 8xx-xxxx-xxxx]
   parts.push({ text: promptText });
 
   let lastError: Error | null = null;
-  const discovered = await discoverModels(apiKey);
-  const modelsToTry = getPreferredGeminiModels(discovered.gemini);
+  let modelsToTry: string[];
+
+  if (overrideModel) {
+    console.log(`[Gemini] Using user-selected model: ${overrideModel}`);
+    modelsToTry = [overrideModel];
+  } else {
+    const discovered = await discoverModels(apiKey);
+    modelsToTry = getPreferredGeminiModels(discovered.gemini);
+  }
 
   for (const modelName of modelsToTry) {
     try {

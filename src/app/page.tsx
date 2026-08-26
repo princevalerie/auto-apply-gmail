@@ -281,7 +281,14 @@ export default function Home() {
           throw new Error(errorMsg);
         }
 
-        const data = await res.json();
+        // Parse streaming response (heartbeat spaces + JSON at end)
+        const rawText = await res.text();
+        const data = JSON.parse(rawText.trim());
+        
+        if (data.error) {
+          throw new Error(data.error);
+        }
+
         extractedResults.push({
           ...data.data,
           screenshotPreview: URL.createObjectURL(file),

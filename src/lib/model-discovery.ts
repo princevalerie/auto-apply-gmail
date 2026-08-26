@@ -8,7 +8,7 @@ interface CachedModels {
   timestamp: number;
 }
 
-const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 let cache: CachedModels | null = null;
 
 // Gemini model preferences (in priority order — vision-capable flash models first)
@@ -42,7 +42,7 @@ async function fetchGeminiModels(apiKey: string): Promise<string[]> {
   try {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
-      { signal: AbortSignal.timeout(1500) }
+      { signal: AbortSignal.timeout(800) }
     );
     if (!res.ok) {
       console.warn(`[Model Discovery] Gemini list models failed: ${res.status}`);
@@ -72,7 +72,7 @@ async function fetchGroqModels(apiKey: string): Promise<string[]> {
   try {
     const res = await fetch("https://api.groq.com/openai/v1/models", {
       headers: { Authorization: `Bearer ${apiKey}` },
-      signal: AbortSignal.timeout(2500),
+      signal: AbortSignal.timeout(1200),
     });
     if (!res.ok) {
       console.warn(`[Model Discovery] Groq list models failed: ${res.status}`);

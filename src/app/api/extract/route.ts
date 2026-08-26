@@ -56,7 +56,10 @@ export async function POST(request: NextRequest) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
-      // Heartbeat: send a space every 3s to keep connection alive
+      // Send initial byte immediately so Vercel recognizes streaming
+      controller.enqueue(encoder.encode(" "));
+
+      // Heartbeat: send a space every 2s to keep connection alive
       const heartbeat = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(" "));
@@ -64,7 +67,7 @@ export async function POST(request: NextRequest) {
           // Stream already closed
           clearInterval(heartbeat);
         }
-      }, 3000);
+      }, 2000);
 
       try {
         // Background user upsert (non-blocking for speed)

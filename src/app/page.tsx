@@ -283,7 +283,18 @@ export default function Home() {
 
         // Parse streaming response (heartbeat spaces + JSON at end)
         const rawText = await res.text();
-        const data = JSON.parse(rawText.trim());
+        const jsonStr = rawText.trim();
+        
+        if (!jsonStr) {
+          throw new Error("Response kosong — fungsi timeout sebelum AI selesai. Coba gunakan model yang lebih ringan (misal Gemini 2.0 Flash Lite).");
+        }
+
+        let data;
+        try {
+          data = JSON.parse(jsonStr);
+        } catch {
+          throw new Error("Response terpotong — AI membutuhkan waktu terlalu lama. Coba model yang lebih cepat.");
+        }
         
         if (data.error) {
           throw new Error(data.error);
